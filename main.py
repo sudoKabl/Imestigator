@@ -110,23 +110,25 @@ class Imestigator(QMainWindow):
             self.tree.hideColumn(column)
             
         def openImage(index):
-            print(self.isSomethingRunning())
-            path = model.filePath(index)
-            if self.CURRENT_FILE != None and self.CURRENT_FILE.ORIGINAL_IMAGE_PATH != path:
-                self.CURRENT_FILE.cleanup()
-                
-            if QFileInfo(path).isFile():
-                self.ACTIVE_MODE = 0
-                self.collapse()
-                pixmap = QPixmap(path)
-                if pixmap.isNull():
-                    print("Failed to load image")
-                else:
-                    scaled_pixmap = pixmap.scaled(self.imageLabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                    self.imageLabel.setPixmap(scaled_pixmap)
-                    self.CURRENT_FILE = ImageData(path)
-                    print("Image loaded successfully")
-                    self.buildImages()
+            if self.isSomethingRunning() == False:
+                path = model.filePath(index)
+                if self.CURRENT_FILE != None and self.CURRENT_FILE.ORIGINAL_IMAGE_PATH != path:
+                    self.CURRENT_FILE.cleanup()
+                    
+                if QFileInfo(path).isFile():
+                    self.ACTIVE_MODE = 0
+                    self.collapse()
+                    pixmap = QPixmap(path)
+                    
+                    if pixmap.isNull():
+                        print("Failed to load image")
+                    else:
+                        scaled_pixmap = pixmap.scaled(self.imageLabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                        self.imageLabel.setPixmap(scaled_pixmap)
+                        self.CURRENT_FILE = ImageData(path)
+                        print("Image loaded successfully")
+                        print(self.CURRENT_FILE.images)
+                        self.buildImages()
             
         self.tree.doubleClicked.connect(openImage)
         
@@ -542,7 +544,6 @@ class Imestigator(QMainWindow):
         self.WORKERS = [self.CLR_WORKER, self.ELA_WORKER, self.NOA_WORKER, self.AUTO_SIFT_WORKER, self.DETECTING_SIFT_WORKER]
         
         for i in range(len(self.WORKERS)):
-            print(i)
             self.WORKERS[i].finished.connect(lambda i=i: self.enableButton(self.BUTTONS[i]))
             self.WORKERS[i].start()
             

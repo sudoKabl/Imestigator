@@ -30,3 +30,4 @@ class ImageData:
         if os.path.exists(self.WORKING_PATH):
             shutil.rmtree(self.WORKING_PATH)
         
+        self.images.clear()
