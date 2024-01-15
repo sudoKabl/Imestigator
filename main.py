@@ -20,7 +20,7 @@ class Imestigator(QMainWindow):
     
     CURRENT_FILE = None
     
-    SIFT_OPTION = 0
+    CLONE_OPTION = 0
     
     WORKERS = []
     
@@ -283,33 +283,51 @@ class Imestigator(QMainWindow):
         self.NOA_BRIGHTNESS_GROUPBOX.setTitle("Brightness")
         self.NOA_BRIGHTNESS_GROUPBOX.hide()
         
-        # ----- SIFT clone detection
+        # ----- Clone detection
         
-        self.SIFT_BUTTON = QPushButton("SIFT Clone Detection")
-        self.SIFT_BUTTON.clicked.connect(self.siftClicked)
+        self.CLONE_BUTTON = QPushButton("Clone Detection")
+        self.CLONE_BUTTON.clicked.connect(self.cloneClicked)
         
-        self.SIFT_RADIO_AUTO = QRadioButton("Frames")
-        self.SIFT_RADIO_AUTO.toggled.connect(self.radioButtonToggled)
-        self.SIFT_RADIO_AUTO.toggle()
+        self.CLONE_RADIO_AUTO = QRadioButton("Frame by frame")
+        self.CLONE_RADIO_AUTO.toggled.connect(self.radioButtonToggled)
+        self.CLONE_RADIO_AUTO.toggle()
         
-        self.SIFT_RADIO_DETECTING = QRadioButton("Object detection")
-        self.SIFT_RADIO_DETECTING.toggled.connect(self.radioButtonToggled)
-        self.SIFT_RADIO_DETECTING.setEnabled(False)
+        self.CLONE_RADIO_DETECTING = QRadioButton("SIFT + Object detection")
+        self.CLONE_RADIO_DETECTING.toggled.connect(self.radioButtonToggled)
+        self.CLONE_RADIO_DETECTING.setEnabled(False)
         
-        sift_radiobuttons = QVBoxLayout()
-        sift_radiobuttons.addWidget(self.SIFT_RADIO_AUTO)
-        sift_radiobuttons.addWidget(self.SIFT_RADIO_DETECTING)
+        clone_radiobuttons = QVBoxLayout()
+        clone_radiobuttons.addWidget(self.CLONE_RADIO_AUTO)
+        clone_radiobuttons.addWidget(self.CLONE_RADIO_DETECTING)
         
-        self.SIFT_RADIO_GROUPBOX = QGroupBox()
-        self.SIFT_RADIO_GROUPBOX.setLayout(sift_radiobuttons)
-        self.SIFT_RADIO_GROUPBOX.setTitle("Comparison options")
-        self.SIFT_RADIO_GROUPBOX.hide()
+        self.CLONE_RADIO_GROUPBOX = QGroupBox()
+        self.CLONE_RADIO_GROUPBOX.setLayout(clone_radiobuttons)
+        self.CLONE_RADIO_GROUPBOX.setTitle("Comparison options")
+        self.CLONE_RADIO_GROUPBOX.hide()
         
-        self.SIFT_AUTO_GROUPBOX = QGroupBox()
-        self.SIFT_DETECTING_GROUPBOX = QGroupBox()
+        self.CLONE_AUTO_GROUPBOX = QGroupBox()
+        self.CLONE_DETECTING_GROUPBOX = QGroupBox()
         
-        self.SIFT_AUTO_GROUPBOX.setTitle("Options")
-        self.SIFT_DETECTING_GROUPBOX.setTitle("Options")
+        self.CLONE_AUTO_GROUPBOX.setTitle("Options")
+        self.CLONE_DETECTING_GROUPBOX.setTitle("Options")
+        
+        def cloneClick():
+            if self.SLIDER_IS_PRESSED == False:
+                self.updateClone()
+        
+        auto_layout = QVBoxLayout()
+        self.CLONE_AUTO_SLIDER_BLOCKSIZE = self.hSlider(8, 4, 64)
+        self.CLONE_AUTO_SLIDER_BLOCKSIZE.sliderReleased.connect(self.updateClone)
+        self.CLONE_AUTO_SLIDER_BLOCKSIZE.valueChanged.connect(cloneClick)
+        self.CLONE_AUTO_SLIDER_BLOCKSIZE.sliderPressed.connect(sliderDisabler)
+        
+        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_BLOCKSIZE)
+        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_BLOCKSIZE))
+        
+        self.CLONE_AUTO_GROUPBOX.setLayout(auto_layout)
+        self.CLONE_AUTO_GROUPBOX.hide()
+        
+        
         
         # ----- Add all the elements to column
         layout.addWidget(self.NONE_BUTTON)
@@ -335,8 +353,9 @@ class Imestigator(QMainWindow):
         
         layout.addWidget(self.makeLine())
         
-        layout.addWidget(self.SIFT_BUTTON)
-        layout.addWidget(self.SIFT_RADIO_GROUPBOX)
+        layout.addWidget(self.CLONE_BUTTON)
+        layout.addWidget(self.CLONE_RADIO_GROUPBOX)
+        layout.addWidget(self.CLONE_AUTO_GROUPBOX)
         
         
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
@@ -407,6 +426,7 @@ class Imestigator(QMainWindow):
                 number = int(currentValueLabel.text())
                 if number >= slider.minimum() and number <= slider.maximum():
                     slider.setValue(number)
+                    slider.valueChanged.emit(number)
                 else:
                     updateTextValue()
         
@@ -462,9 +482,9 @@ class Imestigator(QMainWindow):
         self.NOA_INTENSITY_GROUPBOX.hide()
         self.NOA_BRIGHTNESS_GROUPBOX.hide()
         
-        self.SIFT_RADIO_GROUPBOX.hide()
-        self.SIFT_AUTO_GROUPBOX.hide()
-        self.SIFT_DETECTING_GROUPBOX.hide()
+        self.CLONE_RADIO_GROUPBOX.hide()
+        self.CLONE_AUTO_GROUPBOX.hide()
+        self.CLONE_DETECTING_GROUPBOX.hide()
     
     
     # ----- BUTTON HANDLING FUNCTIONS
@@ -504,23 +524,24 @@ class Imestigator(QMainWindow):
         self.scaleImage()
 
 
-    def siftClicked(self):
+    def cloneClicked(self):
         self.ACTIVE_MODE = 4
-        self.SIFT_OPTION = 0
-        self.SIFT_RADIO_AUTO.toggle()
+        self.CLONE_OPTION = 0
+        self.CLONE_RADIO_AUTO.toggle()
         self.collapse()
         
-        self.SIFT_RADIO_GROUPBOX.show()
+        self.CLONE_RADIO_GROUPBOX.show()
+        self.CLONE_AUTO_GROUPBOX.show()
         
         self.scaleImage()
         
         
     def radioButtonToggled(self):
-        if self.SIFT_RADIO_AUTO.isChecked():
-            self.SIFT_OPTION = 0
+        if self.CLONE_RADIO_AUTO.isChecked():
+            self.CLONE_OPTION = 0
             self.ACTIVE_MODE = 4
         else:
-            self.SIFT_OPTION = 1
+            self.CLONE_OPTION = 1
             self.ACTIVE_MODE = 5
         if self.CURRENT_FILE != None:
             self.scaleImage()
@@ -528,7 +549,7 @@ class Imestigator(QMainWindow):
     # ----- Image processing
     
     def buildImages(self):
-        self.BUTTONS = [self.COLOR_BUTTON, self.ELA_BUTTON, self.NOA_BUTTON, self.SIFT_BUTTON, self.SIFT_RADIO_DETECTING]
+        self.BUTTONS = [self.COLOR_BUTTON, self.ELA_BUTTON, self.NOA_BUTTON, self.CLONE_BUTTON, self.CLONE_RADIO_DETECTING]
         
         for button in self.BUTTONS:
             button.setEnabled(False)
@@ -537,11 +558,11 @@ class Imestigator(QMainWindow):
         self.CLR_WORKER = ColorWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 100, 100, 100, self.CURRENT_FILE.images[1])
         self.ELA_WORKER = ELAWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 90, self.CURRENT_FILE.images[2], 0, 0)
         self.NOA_WORKER = NoiseWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[3], 3, 100)
-        self.AUTO_SIFT_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4])
-        self.DETECTING_SIFT_WORKER = detectingSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[5])
+        self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4])
+        self.CLONE_DETECTING_WORKER = detectingSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[5])
         
         
-        self.WORKERS = [self.CLR_WORKER, self.ELA_WORKER, self.NOA_WORKER, self.AUTO_SIFT_WORKER, self.DETECTING_SIFT_WORKER]
+        self.WORKERS = [self.CLR_WORKER, self.ELA_WORKER, self.NOA_WORKER, self.CLONE_AUTO_WORKER, self.CLONE_DETECTING_WORKER]
         
         for i in range(len(self.WORKERS)):
             self.WORKERS[i].finished.connect(lambda i=i: self.enableButton(self.BUTTONS[i]))
@@ -595,11 +616,20 @@ class Imestigator(QMainWindow):
     def updateNoa(self):
         if self.CURRENT_FILE != None:
             if self.NOA_WORKER.isRunning():
-                QTimer.singleShot(500, self.updateNoa())
+                QTimer.singleShot(500, self.updateNoa)
             else:
                 self.NOA_WORKER = NoiseWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[3], self.NOA_SLIDER_FILTER_INTENSITY.value(), self.NOA_SLIDER_FILTER_BRIGHTNESS.value())
                 self.NOA_WORKER.finished.connect(self.scaleImage)
                 self.NOA_WORKER.start()
+                
+    def updateClone(self):
+        if self.CURRENT_FILE != None:
+            if self.CLONE_AUTO_WORKER.isRunning() or self.CLONE_DETECTING_WORKER.isRunning():
+                QTimer.singleShot(500, self.updateClone)
+            else:
+                self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4], self.CLONE_AUTO_SLIDER_BLOCKSIZE.value())
+                self.CLONE_AUTO_WORKER.finished.connect(self.scaleImage)
+                self.CLONE_AUTO_WORKER.start()
     
     
 def main():

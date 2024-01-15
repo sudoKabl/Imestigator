@@ -1,7 +1,10 @@
 from PyQt5.QtCore import QThread
 import cv2
+import cv2
 import numpy as np
 import math
+from PIL import Image, ImageStat, ImageDraw
+import imagehash
 
 class autoSIFTWorker(QThread):
     def __init__(self, imagePath, dsiftPath, block_size = 8, parent=None):
@@ -12,32 +15,26 @@ class autoSIFTWorker(QThread):
         
         
     def run(self):
-        img = cv2.imread(self.imagePath)
+        img = Image.open(self.imagePath)
         
-        gray = img.copy()
+        (width, height) = img.size
+        w, h = (math.floor(width/4), math.floor(height/4))
         
+        gray = img.convert('L')
+        gray = gray.resize((w, h), resample=Image.Resampling.BILINEAR)
+        (width, height) = gray.size
         
-        gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
-        
-        height, width = gray.shape
-        
-        w, h = (math.floor(width/2), math.floor(height/2))
-        
-        gray = cv2.resize(gray, (w, h), interpolation=cv2.INTER_LINEAR)
-        gray = (gray / 255) * 15
-        gray = (gray / 15) * 255
-        
-        #cv2.imwrite(self.dsiftPath, gray, [cv2.IMWRITE_JPEG_QUALITY, 50])
-
-        #gray = cv2.imread(self.dsiftPath)
-        
-        #gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
-        height, width = gray.shape
+        print(width, height)
         
         relevant = []
-        hashes = []
+        middle = []
+        rect = []
+        draw = ImageDraw.Draw(img)
         
-        result = gray.copy()
+        #gray.save(self.dsiftPath)
+        #self.finished.emit()
+        #return
+
         for l_x in range(0, width, self.blockSize):
             u_x = l_x + self.blockSize
             
@@ -49,60 +46,44 @@ class autoSIFTWorker(QThread):
                 
                 if (l_y > height):
                     continue
-                    
-                testing_image = gray[l_y:u_y, l_x:u_x]
-                std_dev = np.std(testing_image, axis=(0, 1))
                 
-                if std_dev > 8:
-                    relevant.append((l_x * 4, l_y * 4))
-                    hashes.append(self.getHash(testing_image))
+                area = (l_x, l_y, u_x, u_y)
+                
+                testing_image = gray.crop(area)
+                testing_image.convert('L')
+                
+                stat = ImageStat.Stat(testing_image)
+                std_dev = stat.stddev
+                
+                if std_dev[0] > 20:
+                    relevant.append(testing_image)
+                    x = math.floor(l_x + (self.blockSize / 2))
+                    y = math.floor(l_y + (self.blockSize / 2))
+                                   
+                    middle.append((x * 4, y * 4))
+                    rect.append([(l_x * 4, l_y * 4), (u_x * 4, u_y * 4)])
                     
         
         
-        
-        step = self.blockSize * 4
-        alt = (0, 0, 255)
-
-        
-        for index, hash in enumerate(hashes):
-            ouly = relevant[index][1]
-            oulx = relevant[index][0]
+        for index, image in enumerate(relevant):
+            hash = imagehash.phash(image)
             
-            olry = relevant[index][1] + step
-            olrx = relevant[index][0] + step
-                    
-            for i in range (index + 1, len(hashes)):
-                hash_test = hashes[i]
+            for i in range(index + 1, len(relevant)):
+                hash_comp = imagehash.phash(relevant[i])
                 
-                hamming = self.hammingDistance(hash, hash_test)
+                #print(hash - hash_comp)
                 
-                if hamming < 20:
-                    uly = relevant[i][1]
-                    ulx = relevant[i][0]
-                    
-                    lry = relevant[i][1] + step
-                    lrx = relevant[i][0] + step
-                    
-                    halfstep = step / 2
-                    
-                    middle_x_o = math.floor(oulx + halfstep)
-                    middle_y_o = math.floor(ouly + halfstep)
-                    
-                    middle_x = math.floor(ulx + halfstep)
-                    middle_y = math.floor(uly + halfstep)
+                if hash - hash_comp < 15:
+                    draw.line([middle[index], middle[i]], fill=(255, 0, 0), width=2)
+                    draw.rectangle(rect[index], outline="red", width=1)
+                    draw.rectangle(rect[i], outline="red", width=1)
                     
                     
-                    img = cv2.line(img, (middle_x_o, middle_y_o), (middle_x, middle_y), alt, 1)
                     
-                    img = cv2.rectangle(img, (ulx, uly), (lrx, lry), alt, 1)
-                    img = cv2.rectangle(img, (oulx, ouly), (olrx, olry), alt, 1)
-
-                
-        
-        cv2.imwrite(self.dsiftPath, img)
+        img.save(self.dsiftPath)
         self.finished.emit()
-        return
-
+                    
+            
             
     def getHash(self, img):
         height, width = img.shape
