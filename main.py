@@ -79,13 +79,30 @@ class Imestigator(QMainWindow):
         search_field = QLineEdit()
         search_field.setPlaceholderText("Search or paste path")
         
+        self.had_path = ""
+        
         def filterTree():
             search_text = search_field.text()
-            if QDir(search_text).exists():
-                self.tree.setRootIndex(model.setRootPath(search_text))
+            
+            if search_text == '':
+                model.setNameFilters(["*.jpg", "*.jpeg", "*.png", "*.gif"])
+                model.setFilter(QDir.Filter.NoFilter)
+                self.tree.setRootIndex(model.index(''))
+                self.had_path = ""
             else:
-                self.tree.setRootIndex(model.index(QDir.rootPath()))
-                model.setNameFilters([f'*{search_text}*'])
+                if QDir(search_text).exists():
+                    model.setRootPath(search_text)
+                    model.setNameFilters(["*.jpg", "*.jpeg", "*.png", "*.gif"])
+                    model.setFilter(QDir.Filter.NoFilter)
+                    self.tree.setRootIndex(model.index(search_text))
+                    self.had_path = search_text
+                else:
+                    if self.had_path != "":
+                        if self.had_path in search_text:
+                            search_text = search_text.replace(self.had_path, "", 1)
+                    model.setNameFilters([f"*{search_text}*.jpg", f"*{search_text}*.jpeg", f"*{search_text}*.png", f"*{search_text}*.gif"])
+                    model.setFilter(QDir.Filter.Files | QDir.Filter.Drives | QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot)
+        
         
         search_field.textChanged.connect(filterTree)
         
@@ -99,23 +116,23 @@ class Imestigator(QMainWindow):
         self.tree.setAnimated(False)
         self.tree.setIndentation(20)
         self.tree.setSortingEnabled(True)
+        self.tree.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+        
         self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.tree.setWindowTitle("Search for Files")
         self.tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        
-        h_scrollbar = self.tree.horizontalScrollBar()
-        h_scrollbar.valueChanged.connect(lambda value: self.debugScrollbar(h_scrollbar))
         
         for column in range(1, model.columnCount()):
             self.tree.hideColumn(column)
             
         def openImage(index):
-            if self.isSomethingRunning() == False:
-                path = model.filePath(index)
-                if self.CURRENT_FILE != None and self.CURRENT_FILE.ORIGINAL_IMAGE_PATH != path:
-                    self.CURRENT_FILE.cleanup()
-                    
-                if QFileInfo(path).isFile():
+            path = model.filePath(index)
+            if QFileInfo(path).isFile():
+                if self.isSomethingRunning() == False:
+
+                    if self.CURRENT_FILE != None and self.CURRENT_FILE.ORIGINAL_IMAGE_PATH != path:
+                        self.CURRENT_FILE.cleanup()
+
                     self.ACTIVE_MODE = 0
                     self.collapse()
                     pixmap = QPixmap(path)
@@ -127,7 +144,6 @@ class Imestigator(QMainWindow):
                         self.imageLabel.setPixmap(scaled_pixmap)
                         self.CURRENT_FILE = ImageData(path)
                         print("Image loaded successfully")
-                        print(self.CURRENT_FILE.images)
                         self.buildImages()
             
         self.tree.doubleClicked.connect(openImage)
@@ -289,11 +305,11 @@ class Imestigator(QMainWindow):
         self.CLONE_BUTTON.clicked.connect(self.cloneClicked)
         
         self.CLONE_RADIO_AUTO = QRadioButton("Frame by frame")
-        self.CLONE_RADIO_AUTO.toggled.connect(self.radioButtonToggled)
+        self.CLONE_RADIO_AUTO.toggled.connect(self.cloneRadioButtonToggled)
         self.CLONE_RADIO_AUTO.toggle()
         
         self.CLONE_RADIO_DETECTING = QRadioButton("SIFT + Object detection")
-        self.CLONE_RADIO_DETECTING.toggled.connect(self.radioButtonToggled)
+        self.CLONE_RADIO_DETECTING.toggled.connect(self.cloneRadioButtonToggled)
         self.CLONE_RADIO_DETECTING.setEnabled(False)
         
         clone_radiobuttons = QVBoxLayout()
@@ -316,13 +332,61 @@ class Imestigator(QMainWindow):
                 self.updateClone()
         
         auto_layout = QVBoxLayout()
+        
+        blocksize_label = QLabel("Block size")
+        
         self.CLONE_AUTO_SLIDER_BLOCKSIZE = self.hSlider(8, 4, 64)
         self.CLONE_AUTO_SLIDER_BLOCKSIZE.sliderReleased.connect(self.updateClone)
         self.CLONE_AUTO_SLIDER_BLOCKSIZE.valueChanged.connect(cloneClick)
         self.CLONE_AUTO_SLIDER_BLOCKSIZE.sliderPressed.connect(sliderDisabler)
         
+        min_detail_label = QLabel("Minimum detail level")
+        
+        self.CLONE_AUTO_SLIDER_DETAIL = self.hSlider(5, 1, 50)
+        self.CLONE_AUTO_SLIDER_DETAIL.sliderReleased.connect(self.updateClone)
+        self.CLONE_AUTO_SLIDER_DETAIL.valueChanged.connect(cloneClick)
+        self.CLONE_AUTO_SLIDER_DETAIL.sliderPressed.connect(sliderDisabler)
+        
+        min_similar_label = QLabel("Minimum similarity")
+        
+        self.CLONE_AUTO_SLIDER_SIMILAR = self.hSlider(10, 1, 25)
+        self.CLONE_AUTO_SLIDER_SIMILAR.sliderReleased.connect(self.updateClone)
+        self.CLONE_AUTO_SLIDER_SIMILAR.valueChanged.connect(cloneClick)
+        self.CLONE_AUTO_SLIDER_SIMILAR.sliderPressed.connect(sliderDisabler)
+        
+        hashing_algo_label = QLabel("Hashing algorithm")
+        
+        self.CLONE_AUTO_HASH_ALGO_RADIO = []
+        
+        algo_names = ["Average", "Perceptual", "Difference", "Wavelet", "Crop-Resistant"]
+        
+        for item in algo_names:
+            radio = QRadioButton(item)
+            radio.toggled.connect(self.updateClone)
+            self.CLONE_AUTO_HASH_ALGO_RADIO.append(radio)
+            
+            
+        self.CLONE_AUTO_HASH_ALGO_RADIO[1].toggle()
+        
+
+        
+        
+        auto_layout.addWidget(blocksize_label)
         auto_layout.addWidget(self.CLONE_AUTO_SLIDER_BLOCKSIZE)
         auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_BLOCKSIZE))
+        
+        auto_layout.addWidget(min_detail_label)
+        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_DETAIL)
+        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_DETAIL))
+        
+        auto_layout.addWidget(min_similar_label)
+        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR)
+        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR))
+        
+        auto_layout.addWidget(hashing_algo_label)
+        for item in self.CLONE_AUTO_HASH_ALGO_RADIO:
+            auto_layout.addWidget(item)
+        
         
         self.CLONE_AUTO_GROUPBOX.setLayout(auto_layout)
         self.CLONE_AUTO_GROUPBOX.hide()
@@ -536,7 +600,7 @@ class Imestigator(QMainWindow):
         self.scaleImage()
         
         
-    def radioButtonToggled(self):
+    def cloneRadioButtonToggled(self):
         if self.CLONE_RADIO_AUTO.isChecked():
             self.CLONE_OPTION = 0
             self.ACTIVE_MODE = 4
@@ -545,6 +609,7 @@ class Imestigator(QMainWindow):
             self.ACTIVE_MODE = 5
         if self.CURRENT_FILE != None:
             self.scaleImage()
+            
 
     # ----- Image processing
     
@@ -627,7 +692,12 @@ class Imestigator(QMainWindow):
             if self.CLONE_AUTO_WORKER.isRunning() or self.CLONE_DETECTING_WORKER.isRunning():
                 QTimer.singleShot(500, self.updateClone)
             else:
-                self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4], self.CLONE_AUTO_SLIDER_BLOCKSIZE.value())
+                selected = 0
+                for index, option in enumerate(self.CLONE_AUTO_HASH_ALGO_RADIO):
+                    if option.isChecked():
+                        selected = index
+                        break
+                self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4], self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), min_similar=self.CLONE_AUTO_SLIDER_DETAIL.value(), hash_mode=selected)
                 self.CLONE_AUTO_WORKER.finished.connect(self.scaleImage)
                 self.CLONE_AUTO_WORKER.start()
     

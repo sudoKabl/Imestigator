@@ -3,15 +3,21 @@ import cv2
 import cv2
 import numpy as np
 import math
-from PIL import Image, ImageStat, ImageDraw
+from PIL import Image, ImageStat, ImageDraw, ImageTk
 import imagehash
+import time
+
+import tkinter as tk
 
 class autoSIFTWorker(QThread):
-    def __init__(self, imagePath, dsiftPath, block_size = 8, parent=None):
+    def __init__(self, imagePath, dsiftPath, block_size = 8, min_detail = 5, min_similar = 10, hash_mode = 1, parent=None):
         super().__init__(parent)
         self.imagePath = imagePath
         self.dsiftPath = dsiftPath
         self.blockSize = block_size
+        self.minDetail = min_detail
+        self.minSimilar = min_similar
+        self.hashMode = hash_mode
         
         
     def run(self):
@@ -24,64 +30,124 @@ class autoSIFTWorker(QThread):
         gray = gray.resize((w, h), resample=Image.Resampling.BILINEAR)
         (width, height) = gray.size
         
-        print(width, height)
-        
         relevant = []
         middle = []
-        rect = []
+        rect_helper = []
+        
+        sub_rect = []
+        sub_middle = []
+        
         draw = ImageDraw.Draw(img)
         
-        #gray.save(self.dsiftPath)
-        #self.finished.emit()
-        #return
 
-        for l_x in range(0, width, self.blockSize):
-            u_x = l_x + self.blockSize
-            
+        stepsize = self.blockSize * 2
+
+        for l_x in range(0, width, stepsize):
+            u_x = l_x + stepsize
+
             if (u_x > width):
                 continue
             
-            for l_y in range(0, height, self.blockSize):
-                u_y = l_y + self.blockSize
+            for l_y in range(0, height, stepsize):
+                u_y = l_y + stepsize
                 
-                if (l_y > height):
+                if (u_y > height):
                     continue
                 
                 area = (l_x, l_y, u_x, u_y)
                 
                 testing_image = gray.crop(area)
-                testing_image.convert('L')
                 
                 stat = ImageStat.Stat(testing_image)
                 std_dev = stat.stddev
-                
-                if std_dev[0] > 20:
+            
+
+                if std_dev[0] >= self.minDetail:
                     relevant.append(testing_image)
-                    x = math.floor(l_x + (self.blockSize / 2))
-                    y = math.floor(l_y + (self.blockSize / 2))
+                    x = math.floor(l_x + (stepsize / 2))
+                    y = math.floor(l_y + (stepsize / 2))
                                    
-                    middle.append((x * 4, y * 4))
-                    rect.append([(l_x * 4, l_y * 4), (u_x * 4, u_y * 4)])
+                    sub_middle.append((x, y))
                     
-        
+                    rect_helper.append([(l_x * 4, l_y * 4), (u_x * 4, u_y * 4)])
+                    sub_rect.append(area)
+
+
+        rect = []
+        working_images = []
         
         for index, image in enumerate(relevant):
-            hash = imagehash.phash(image)
+
+            l_x = 0
+            l_y = 0
+            u_x, u_y = image.size
+            m_x = math.floor(u_x/2)
+            m_y = math.floor(u_y/2)
             
-            for i in range(index + 1, len(relevant)):
-                hash_comp = imagehash.phash(relevant[i])
+            sub_areas = [
+                (l_x, l_y, m_x, m_y), 
+                (m_x, l_y, u_x, m_y), 
+                (l_x, m_y, m_x, u_y), 
+                (m_x, m_y, u_x, u_y)
+                ]
+            
+            real_l, real_u = rect_helper[index]
+            real = (real_l[0], real_l[1], real_l[0], real_l[1])
+
+            for a in sub_areas:
+                gray_koords = tuple(map(lambda i, j: i + (j/4), a, real))
+                working_images.append(gray.crop(gray_koords))
                 
-                #print(hash - hash_comp)
                 
-                if hash - hash_comp < 15:
+                rect.append(tuple(map(lambda i, j: (i * 4) + j, a, real)))
+                middle_x = gray_koords[0] + (u_x / 4)
+                middle_y = gray_koords[1] + (u_y / 4) 
+                middle.append((middle_x * 4, middle_y * 4))
+            
+        
+        hashmap = []
+        
+        if self.hashMode == 0:
+            for image in working_images:
+                hashmap.append(imagehash.average_hash(image))
+        elif self.hashMode == 1:
+            for image in working_images:
+                hashmap.append(imagehash.phash(image))
+        elif self.hashMode == 2:
+            for image in working_images:
+                hashmap.append(imagehash.dhash(image))
+        elif self.hashMode == 3:
+            for image in working_images:
+                hashmap.append(imagehash.whash(image))
+        elif self.hashMode == 4:
+            for image in working_images:
+                hashmap.append(imagehash.crop_resistant_hash(image))        
+                
+        
+        for index, image in enumerate(working_images):
+            hash = hashmap[index]
+            
+            for i in range(index + 1, len(working_images)):
+                hash_comp = hashmap[i]
+                
+                #temp_img = img.copy()
+                #draw_temp = ImageDraw.Draw(temp_img)
+                
+                #draw_temp.rectangle(rect[index], outline="green", width=1)
+                #draw_temp.rectangle(rect[i], outline="blue", width=1)
+                #draw_temp.line([middle[index], middle[i]], fill=(0, 255, 255), width=2)
+
+                if hash - hash_comp < self.minSimilar:
                     draw.line([middle[index], middle[i]], fill=(255, 0, 0), width=2)
                     draw.rectangle(rect[index], outline="red", width=1)
                     draw.rectangle(rect[i], outline="red", width=1)
                     
                     
+        print("done")
                     
         img.save(self.dsiftPath)
         self.finished.emit()
+        return
                     
             
             
@@ -115,3 +181,4 @@ class autoSIFTWorker(QThread):
             return count
         else:
             return 500
+        
