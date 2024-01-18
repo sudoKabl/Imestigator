@@ -358,7 +358,7 @@ class Imestigator(QMainWindow):
         
         self.CLONE_AUTO_HASH_ALGO_RADIO = []
         
-        algo_names = ["Average", "Perceptual", "Difference", "Wavelet", "Crop-Resistant"]
+        algo_names = ["Color", "Average", "Perceptual", "Difference", "Wavelet", "Crop-Resistant"]
         
         for item in algo_names:
             radio = QRadioButton(item)
@@ -366,7 +366,7 @@ class Imestigator(QMainWindow):
             self.CLONE_AUTO_HASH_ALGO_RADIO.append(radio)
             
             
-        self.CLONE_AUTO_HASH_ALGO_RADIO[1].toggle()
+        self.CLONE_AUTO_HASH_ALGO_RADIO[0].toggle()
         
 
         
@@ -623,7 +623,12 @@ class Imestigator(QMainWindow):
         self.CLR_WORKER = ColorWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 100, 100, 100, self.CURRENT_FILE.images[1])
         self.ELA_WORKER = ELAWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 90, self.CURRENT_FILE.images[2], 0, 0)
         self.NOA_WORKER = NoiseWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[3], 3, 100)
-        self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4])
+        selected = 0
+        for index, option in enumerate(self.CLONE_AUTO_HASH_ALGO_RADIO):
+                    if option.isChecked():
+                        selected = index
+                        break
+        self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4], self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), min_similar=self.CLONE_AUTO_SLIDER_SIMILAR.value(), hash_mode=selected)
         self.CLONE_DETECTING_WORKER = detectingSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[5])
         
         
@@ -697,7 +702,7 @@ class Imestigator(QMainWindow):
                     if option.isChecked():
                         selected = index
                         break
-                self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4], self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), min_similar=self.CLONE_AUTO_SLIDER_DETAIL.value(), hash_mode=selected)
+                self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4], self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), min_similar=self.CLONE_AUTO_SLIDER_SIMILAR.value(), hash_mode=selected)
                 self.CLONE_AUTO_WORKER.finished.connect(self.scaleImage)
                 self.CLONE_AUTO_WORKER.start()
     

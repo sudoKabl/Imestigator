@@ -3,14 +3,14 @@ import cv2
 import cv2
 import numpy as np
 import math
-from PIL import Image, ImageStat, ImageDraw, ImageTk
+from PIL import Image, ImageStat, ImageDraw, ImageFilter
 import imagehash
 import time
 
 import tkinter as tk
 
 class autoSIFTWorker(QThread):
-    def __init__(self, imagePath, dsiftPath, block_size = 8, min_detail = 5, min_similar = 10, hash_mode = 1, parent=None):
+    def __init__(self, imagePath, dsiftPath, block_size, min_detail, min_similar, hash_mode = 1, parent=None):
         super().__init__(parent)
         self.imagePath = imagePath
         self.dsiftPath = dsiftPath
@@ -27,7 +27,10 @@ class autoSIFTWorker(QThread):
         w, h = (math.floor(width/4), math.floor(height/4))
         
         gray = img.convert('L')
-        gray = gray.resize((w, h), resample=Image.Resampling.BILINEAR)
+        gray = gray.filter(ImageFilter.UnsharpMask)
+        gray = gray.filter(ImageFilter.GaussianBlur)
+        gray = gray.resize((w, h), resample=Image.Resampling.NEAREST)
+        print(gray.getextrema())
         (width, height) = gray.size
         
         relevant = []
@@ -38,6 +41,12 @@ class autoSIFTWorker(QThread):
         sub_middle = []
         
         draw = ImageDraw.Draw(img)
+        gray_copy = gray.copy()
+        draw_gray = ImageDraw.Draw(gray_copy)
+        
+        #gray.save(self.dsiftPath)
+        #self.finished.emit()
+        #return
         
 
         stepsize = self.blockSize * 2
@@ -66,12 +75,20 @@ class autoSIFTWorker(QThread):
                     relevant.append(testing_image)
                     x = math.floor(l_x + (stepsize / 2))
                     y = math.floor(l_y + (stepsize / 2))
+                    
+                    draw_gray.rectangle(area)
+                    draw_gray.text((l_x + 1, l_y), str(math.floor(std_dev[0])))
                                    
                     sub_middle.append((x, y))
                     
                     rect_helper.append([(l_x * 4, l_y * 4), (u_x * 4, u_y * 4)])
                     sub_rect.append(area)
 
+        gray_copy.save(self.dsiftPath)
+        self.finished.emit()
+        return
+    
+    # Idee: Nur felder vergleichen die in der nähe der anderen Standardabweichung sind?
 
         rect = []
         working_images = []
@@ -109,19 +126,25 @@ class autoSIFTWorker(QThread):
         
         if self.hashMode == 0:
             for image in working_images:
-                hashmap.append(imagehash.average_hash(image))
-        elif self.hashMode == 1:
+                hashmap.append(imagehash.colorhash(image))
+        
+        if self.hashMode == 1:
             for image in working_images:
-                hashmap.append(imagehash.phash(image))
+                hashmap.append(imagehash.average_hash(image))
         elif self.hashMode == 2:
             for image in working_images:
-                hashmap.append(imagehash.dhash(image))
+                hashmap.append(imagehash.phash(image))
         elif self.hashMode == 3:
             for image in working_images:
-                hashmap.append(imagehash.whash(image))
+                hashmap.append(imagehash.dhash(image))
         elif self.hashMode == 4:
             for image in working_images:
-                hashmap.append(imagehash.crop_resistant_hash(image))        
+                hashmap.append(imagehash.whash(image))
+        elif self.hashMode == 5:
+            for image in working_images:
+                hashmap.append(imagehash.crop_resistant_hash(image))
+                
+        imagehash.colorhash
                 
         
         for index, image in enumerate(working_images):
@@ -138,12 +161,12 @@ class autoSIFTWorker(QThread):
                 #draw_temp.line([middle[index], middle[i]], fill=(0, 255, 255), width=2)
 
                 if hash - hash_comp < self.minSimilar:
-                    draw.line([middle[index], middle[i]], fill=(255, 0, 0), width=2)
+                    #draw.line([middle[index], middle[i]], fill=(255, 0, 0), width=2)
                     draw.rectangle(rect[index], outline="red", width=1)
                     draw.rectangle(rect[i], outline="red", width=1)
                     
                     
-        print("done")
+        print("done with " + str(self.minSimilar))
                     
         img.save(self.dsiftPath)
         self.finished.emit()
