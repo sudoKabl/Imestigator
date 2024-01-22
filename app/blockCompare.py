@@ -9,7 +9,7 @@ import time
 
 import tkinter as tk
 
-class autoSIFTWorker(QThread):
+class blockCompareWorker(QThread):
     def __init__(self, imagePath, dsiftPath, block_size, min_detail, min_similar, hash_mode = 1, parent=None):
         super().__init__(parent)
         self.imagePath = imagePath
@@ -84,9 +84,9 @@ class autoSIFTWorker(QThread):
                     rect_helper.append([(l_x * 4, l_y * 4), (u_x * 4, u_y * 4)])
                     sub_rect.append(area)
 
-        gray_copy.save(self.dsiftPath)
-        self.finished.emit()
-        return
+        #gray_copy.save(self.dsiftPath)
+        #self.finished.emit()
+        #return
     
     # Idee: Nur felder vergleichen die in der nähe der anderen Standardabweichung sind?
 
@@ -161,7 +161,7 @@ class autoSIFTWorker(QThread):
                 #draw_temp.line([middle[index], middle[i]], fill=(0, 255, 255), width=2)
 
                 if hash - hash_comp < self.minSimilar:
-                    #draw.line([middle[index], middle[i]], fill=(255, 0, 0), width=2)
+                    draw.line([middle[index], middle[i]], fill=(255, 0, 0), width=2)
                     draw.rectangle(rect[index], outline="red", width=1)
                     draw.rectangle(rect[i], outline="red", width=1)
                     

@@ -10,7 +10,7 @@ from app.ImageDataHolder import ImageData
 from app.color import ColorWorker
 from app.ela import ELAWorker
 from app.noise import NoiseWorker
-from app.autoSIFT import autoSIFTWorker
+from app.blockCompare import blockCompareWorker
 from app.detectingSIFT import detectingSIFTWorker
 
 class Imestigator(QMainWindow):
@@ -654,7 +654,15 @@ class Imestigator(QMainWindow):
                     if option.isChecked():
                         selected = index
                         break
-        self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4], self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), min_similar=self.CLONE_AUTO_SLIDER_SIMILAR.value(), hash_mode=selected)
+                    
+        self.CLONE_AUTO_WORKER = blockCompareWorker(
+            self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+            self.CURRENT_FILE.images[4], 
+            self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
+            min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), 
+            min_similar=self.CLONE_AUTO_SLIDER_SIMILAR.value(), 
+            hash_mode=selected)
+        
         self.CLONE_DETECTING_WORKER = detectingSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[5])
         
         
@@ -701,6 +709,7 @@ class Imestigator(QMainWindow):
             else:
                 self.ELA_SLIDER_IS_PRESSED = False
                 if self.CURRENT_FILE != None:
+                    
                     self.ELA_WORKER = ELAWorker(
                         self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
                         self.CURRENT_FILE.images[2], 
@@ -708,6 +717,7 @@ class Imestigator(QMainWindow):
                         offset_x=self.ELA_OFFSET_SLIDER_X.value(), 
                         offset_y=self.ELA_OFFSET_SLIDER_Y.value()
                         )
+                    
                     self.ELA_WORKER.finished.connect(self.scaleImage)
                     self.ELA_WORKER.start()
     
@@ -717,6 +727,7 @@ class Imestigator(QMainWindow):
             if self.NOA_WORKER.isRunning():
                 QTimer.singleShot(500, self.updateNoa)
             else:
+                
                 self.NOA_WORKER = NoiseWorker(
                     self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
                     self.CURRENT_FILE.images[3], 
@@ -725,6 +736,7 @@ class Imestigator(QMainWindow):
                     useMedian=self.NOA_USEMEDIAN.isChecked(),
                     subtractEdges=self.NOA_SUBTRACTEDGES.isChecked()
                     )
+                
                 self.NOA_WORKER.finished.connect(self.scaleImage)
                 self.NOA_WORKER.start()
                 
@@ -738,7 +750,16 @@ class Imestigator(QMainWindow):
                     if option.isChecked():
                         selected = index
                         break
-                self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4], self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), min_similar=self.CLONE_AUTO_SLIDER_SIMILAR.value(), hash_mode=selected)
+                    
+                self.CLONE_AUTO_WORKER = blockCompareWorker(
+                    self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+                    self.CURRENT_FILE.images[4], 
+                    self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
+                    min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), 
+                    min_similar=self.CLONE_AUTO_SLIDER_SIMILAR.value(), 
+                    hash_mode=selected
+                    )
+                
                 self.CLONE_AUTO_WORKER.finished.connect(self.scaleImage)
                 self.CLONE_AUTO_WORKER.start()
     
