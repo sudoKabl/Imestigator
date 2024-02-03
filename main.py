@@ -10,7 +10,7 @@ from app.ImageDataHolder import ImageData
 from app.color import ColorWorker
 from app.ela import ELAWorker
 from app.noise import NoiseWorker
-from app.autoSIFT import autoSIFTWorker
+from app.blockCompare import blockCompareWorker
 from app.detectingSIFT import detectingSIFTWorker
 
 class Imestigator(QMainWindow):
@@ -267,20 +267,31 @@ class Imestigator(QMainWindow):
         self.NOA_BUTTON.setToolTip("Perform general noise analysis")
         self.NOA_BUTTON.clicked.connect(self.noaClicked)
         
+        self.NOA_CONTENT = QWidget()
+        noa_content_layout = QVBoxLayout()
+        
+        self.NOA_USEMEDIAN = QCheckBox("Use Median Filter")
+        self.NOA_USEMEDIAN.clicked.connect(self.updateNoa)
+        self.NOA_SUBTRACTEDGES = QCheckBox("Edge reduction")
+        self.NOA_SUBTRACTEDGES.clicked.connect(self.updateNoa)
+        
+        noa_content_layout.addWidget(self.NOA_USEMEDIAN)
+        noa_content_layout.addWidget(self.NOA_SUBTRACTEDGES)
+        
         def noaClick():
             if self.SLIDER_IS_PRESSED == False:
                 self.updateNoa()
         
-        self.NOA_INTENSITY_GROUPBOX = QGroupBox()
+        noa_i_gb = QGroupBox()
         noa_l = QVBoxLayout()
         self.NOA_SLIDER_FILTER_INTENSITY = self.hSlider(3, 3, 15)
         self.NOA_SLIDER_FILTER_INTENSITY.sliderReleased.connect(self.updateNoa)
         self.NOA_SLIDER_FILTER_INTENSITY.valueChanged.connect(noaClick)
         self.NOA_SLIDER_FILTER_INTENSITY.sliderPressed.connect(sliderDisabler)
         
-        self.NOA_BRIGHTNESS_GROUPBOX = QGroupBox()
+        noa_b_gb = QGroupBox()
         noa_b = QVBoxLayout()
-        self.NOA_SLIDER_FILTER_BRIGHTNESS = self.hSlider(100, 1, 500)
+        self.NOA_SLIDER_FILTER_BRIGHTNESS = self.hSlider(300, 1, 500)
         self.NOA_SLIDER_FILTER_BRIGHTNESS.sliderReleased.connect(self.updateNoa)
         self.NOA_SLIDER_FILTER_BRIGHTNESS.valueChanged.connect(noaClick)
         self.NOA_SLIDER_FILTER_BRIGHTNESS.sliderPressed.connect(sliderDisabler)
@@ -291,13 +302,16 @@ class Imestigator(QMainWindow):
         noa_b.addWidget(self.NOA_SLIDER_FILTER_BRIGHTNESS)
         noa_b.addLayout(self.hSliderLabels(self.NOA_SLIDER_FILTER_BRIGHTNESS))
         
-        self.NOA_INTENSITY_GROUPBOX.setLayout(noa_l)
-        self.NOA_INTENSITY_GROUPBOX.setTitle("Filter intensity")
-        self.NOA_INTENSITY_GROUPBOX.hide()
+        noa_i_gb.setLayout(noa_l)
+        noa_i_gb.setTitle("Filter intensity")
+        noa_content_layout.addWidget(noa_i_gb)
         
-        self.NOA_BRIGHTNESS_GROUPBOX.setLayout(noa_b)
-        self.NOA_BRIGHTNESS_GROUPBOX.setTitle("Brightness")
-        self.NOA_BRIGHTNESS_GROUPBOX.hide()
+        noa_b_gb.setLayout(noa_b)
+        noa_b_gb.setTitle("Brightness")
+        noa_content_layout.addWidget(noa_b_gb)
+        
+        self.NOA_CONTENT.setLayout(noa_content_layout)
+        self.NOA_CONTENT.hide()
         
         # ----- Clone detection
         
@@ -335,7 +349,7 @@ class Imestigator(QMainWindow):
         
         blocksize_label = QLabel("Block size")
         
-        self.CLONE_AUTO_SLIDER_BLOCKSIZE = self.hSlider(8, 4, 64)
+        self.CLONE_AUTO_SLIDER_BLOCKSIZE = self.hSlider(16, 4, 64)
         self.CLONE_AUTO_SLIDER_BLOCKSIZE.sliderReleased.connect(self.updateClone)
         self.CLONE_AUTO_SLIDER_BLOCKSIZE.valueChanged.connect(cloneClick)
         self.CLONE_AUTO_SLIDER_BLOCKSIZE.sliderPressed.connect(sliderDisabler)
@@ -347,28 +361,20 @@ class Imestigator(QMainWindow):
         self.CLONE_AUTO_SLIDER_DETAIL.valueChanged.connect(cloneClick)
         self.CLONE_AUTO_SLIDER_DETAIL.sliderPressed.connect(sliderDisabler)
         
-        min_similar_label = QLabel("Minimum similarity")
+        min_similar_pHash_label = QLabel("pHash Threshold")
         
-        self.CLONE_AUTO_SLIDER_SIMILAR = self.hSlider(10, 1, 25)
-        self.CLONE_AUTO_SLIDER_SIMILAR.sliderReleased.connect(self.updateClone)
-        self.CLONE_AUTO_SLIDER_SIMILAR.valueChanged.connect(cloneClick)
-        self.CLONE_AUTO_SLIDER_SIMILAR.sliderPressed.connect(sliderDisabler)
+        self.CLONE_AUTO_SLIDER_SIMILAR_P = self.hSlider(20, 10, 40)
+        self.CLONE_AUTO_SLIDER_SIMILAR_P.sliderReleased.connect(self.updateClone)
+        self.CLONE_AUTO_SLIDER_SIMILAR_P.valueChanged.connect(cloneClick)
+        self.CLONE_AUTO_SLIDER_SIMILAR_P.sliderPressed.connect(sliderDisabler)
         
-        hashing_algo_label = QLabel("Hashing algorithm")
+        min_similar_dHash_label = QLabel("dHash Threshold")
         
-        self.CLONE_AUTO_HASH_ALGO_RADIO = []
+        self.CLONE_AUTO_SLIDER_SIMILAR_D = self.hSlider(7, 1, 25)
+        self.CLONE_AUTO_SLIDER_SIMILAR_D.sliderReleased.connect(self.updateClone)
+        self.CLONE_AUTO_SLIDER_SIMILAR_D.valueChanged.connect(cloneClick)
+        self.CLONE_AUTO_SLIDER_SIMILAR_D.sliderPressed.connect(sliderDisabler)
         
-        algo_names = ["Color", "Average", "Perceptual", "Difference", "Wavelet", "Crop-Resistant"]
-        
-        for item in algo_names:
-            radio = QRadioButton(item)
-            radio.toggled.connect(self.updateClone)
-            self.CLONE_AUTO_HASH_ALGO_RADIO.append(radio)
-            
-            
-        self.CLONE_AUTO_HASH_ALGO_RADIO[0].toggle()
-        
-
         
         
         auto_layout.addWidget(blocksize_label)
@@ -379,13 +385,13 @@ class Imestigator(QMainWindow):
         auto_layout.addWidget(self.CLONE_AUTO_SLIDER_DETAIL)
         auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_DETAIL))
         
-        auto_layout.addWidget(min_similar_label)
-        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR)
-        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR))
+        auto_layout.addWidget(min_similar_pHash_label)
+        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR_P)
+        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR_P))
         
-        auto_layout.addWidget(hashing_algo_label)
-        for item in self.CLONE_AUTO_HASH_ALGO_RADIO:
-            auto_layout.addWidget(item)
+        auto_layout.addWidget(min_similar_dHash_label)
+        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR_D)
+        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR_D))
         
         
         self.CLONE_AUTO_GROUPBOX.setLayout(auto_layout)
@@ -412,8 +418,7 @@ class Imestigator(QMainWindow):
         layout.addWidget(self.makeLine())
         
         layout.addWidget(self.NOA_BUTTON)
-        layout.addWidget(self.NOA_INTENSITY_GROUPBOX)
-        layout.addWidget(self.NOA_BRIGHTNESS_GROUPBOX)
+        layout.addWidget(self.NOA_CONTENT)
         
         layout.addWidget(self.makeLine())
         
@@ -543,8 +548,7 @@ class Imestigator(QMainWindow):
         self.ELA_QUALITY_GROUPBOX.hide()
         self.ELA_OFFSET_GROUPBOX.hide()
         
-        self.NOA_INTENSITY_GROUPBOX.hide()
-        self.NOA_BRIGHTNESS_GROUPBOX.hide()
+        self.NOA_CONTENT.hide()
         
         self.CLONE_RADIO_GROUPBOX.hide()
         self.CLONE_AUTO_GROUPBOX.hide()
@@ -582,8 +586,7 @@ class Imestigator(QMainWindow):
     def noaClicked(self):
         self.ACTIVE_MODE = 3
         self.collapse()
-        self.NOA_INTENSITY_GROUPBOX.show()
-        self.NOA_BRIGHTNESS_GROUPBOX.show()
+        self.NOA_CONTENT.show()
         
         self.scaleImage()
 
@@ -621,14 +624,32 @@ class Imestigator(QMainWindow):
         
         
         self.CLR_WORKER = ColorWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 100, 100, 100, self.CURRENT_FILE.images[1])
-        self.ELA_WORKER = ELAWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 90, self.CURRENT_FILE.images[2], 0, 0)
-        self.NOA_WORKER = NoiseWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[3], 3, 100)
-        selected = 0
-        for index, option in enumerate(self.CLONE_AUTO_HASH_ALGO_RADIO):
-                    if option.isChecked():
-                        selected = index
-                        break
-        self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4], self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), min_similar=self.CLONE_AUTO_SLIDER_SIMILAR.value(), hash_mode=selected)
+        self.ELA_WORKER = ELAWorker(
+            self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+            self.CURRENT_FILE.images[2], 
+            q=self.ELA_SLIDER.value(), 
+            offset_x=self.ELA_OFFSET_SLIDER_X.value(), 
+            offset_y=self.ELA_OFFSET_SLIDER_Y.value()
+            )
+        
+        self.NOA_WORKER = NoiseWorker(
+            self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+            self.CURRENT_FILE.images[3], 
+            self.NOA_SLIDER_FILTER_INTENSITY.value(), 
+            self.NOA_SLIDER_FILTER_BRIGHTNESS.value(),
+            useMedian=self.NOA_USEMEDIAN.isChecked(),
+            subtractEdges=self.NOA_SUBTRACTEDGES.isChecked()
+            )
+                    
+        self.CLONE_AUTO_WORKER = blockCompareWorker(
+            self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+            self.CURRENT_FILE.images[4], 
+            block_size=self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
+            min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), 
+            dHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_D.value(), 
+            pHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_P.value()
+            )
+        
         self.CLONE_DETECTING_WORKER = detectingSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[5])
         
         
@@ -675,10 +696,15 @@ class Imestigator(QMainWindow):
             else:
                 self.ELA_SLIDER_IS_PRESSED = False
                 if self.CURRENT_FILE != None:
-                    value = self.ELA_SLIDER.value()
-                    x = self.ELA_OFFSET_SLIDER_X.value()
-                    y = self.ELA_OFFSET_SLIDER_Y.value()
-                    self.ELA_WORKER = ELAWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, value, self.CURRENT_FILE.images[2], x, y)
+                    
+                    self.ELA_WORKER = ELAWorker(
+                        self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+                        self.CURRENT_FILE.images[2], 
+                        q=self.ELA_SLIDER.value(), 
+                        offset_x=self.ELA_OFFSET_SLIDER_X.value(), 
+                        offset_y=self.ELA_OFFSET_SLIDER_Y.value()
+                        )
+                    
                     self.ELA_WORKER.finished.connect(self.scaleImage)
                     self.ELA_WORKER.start()
     
@@ -688,7 +714,16 @@ class Imestigator(QMainWindow):
             if self.NOA_WORKER.isRunning():
                 QTimer.singleShot(500, self.updateNoa)
             else:
-                self.NOA_WORKER = NoiseWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[3], self.NOA_SLIDER_FILTER_INTENSITY.value(), self.NOA_SLIDER_FILTER_BRIGHTNESS.value())
+                
+                self.NOA_WORKER = NoiseWorker(
+                    self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+                    self.CURRENT_FILE.images[3], 
+                    self.NOA_SLIDER_FILTER_INTENSITY.value(), 
+                    self.NOA_SLIDER_FILTER_BRIGHTNESS.value(),
+                    useMedian=self.NOA_USEMEDIAN.isChecked(),
+                    subtractEdges=self.NOA_SUBTRACTEDGES.isChecked()
+                    )
+                
                 self.NOA_WORKER.finished.connect(self.scaleImage)
                 self.NOA_WORKER.start()
                 
@@ -696,13 +731,16 @@ class Imestigator(QMainWindow):
         if self.CURRENT_FILE != None:
             if self.CLONE_AUTO_WORKER.isRunning() or self.CLONE_DETECTING_WORKER.isRunning():
                 QTimer.singleShot(500, self.updateClone)
-            else:
-                selected = 0
-                for index, option in enumerate(self.CLONE_AUTO_HASH_ALGO_RADIO):
-                    if option.isChecked():
-                        selected = index
-                        break
-                self.CLONE_AUTO_WORKER = autoSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[4], self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), min_similar=self.CLONE_AUTO_SLIDER_SIMILAR.value(), hash_mode=selected)
+            else:        
+                self.CLONE_AUTO_WORKER = blockCompareWorker(
+                    self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+                    self.CURRENT_FILE.images[4], 
+                    self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
+                    min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), 
+                    dHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_D.value(), 
+                    pHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_P.value()
+                    )
+                
                 self.CLONE_AUTO_WORKER.finished.connect(self.scaleImage)
                 self.CLONE_AUTO_WORKER.start()
     
