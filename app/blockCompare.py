@@ -1,207 +1,220 @@
 from PyQt5.QtCore import QThread
-import cv2
-import cv2
 import numpy as np
 import math
 from PIL import Image, ImageStat, ImageDraw, ImageFilter
 import imagehash
-import time
+import pywt
 
-import tkinter as tk
+
+
 
 class blockCompareWorker(QThread):
-    def __init__(self, imagePath, dsiftPath, block_size, min_detail, min_similar, hash_mode = 1, parent=None):
+    def __init__(self, imagePath, clonePath, block_size, min_detail, dHash_thresh, pHash_thresh, parent=None):
         super().__init__(parent)
         self.imagePath = imagePath
-        self.dsiftPath = dsiftPath
-        self.blockSize = block_size
-        self.minDetail = min_detail
-        self.minSimilar = min_similar
-        self.hashMode = hash_mode
+        self.clonePath = clonePath
         
+        self.frameSize = block_size
+        
+        self.minDetail = min_detail
+        
+        self.dHashThreshold = dHash_thresh
+        self.pHashThreshold = pHash_thresh
+    
+    
+    # convert a image using haar wavelets in a jpeg-style compression 
+    def quantize(self, image, wavelet='haar', level=1, scale=(8, 8)):
+        # grayscale and resize image
+        image = image.convert('L')
+        image = image.resize(scale, Image.Resampling.NEAREST)
+
+        data = np.array(image, dtype=float)
+
+        # Actual wavelet transform
+        coeffs = pywt.wavedec2(data, wavelet, level=level)
+        coeffs_arr, coeff_slices = pywt.coeffs_to_array(coeffs)
+        
+        # Quantization matrix, uniform 
+        quantization_matrix = np.ones_like(coeffs_arr) * 50
+        quantized_coeffs_arr = np.round(coeffs_arr / quantization_matrix) * quantization_matrix
+
+        quantized_coeffs = pywt.array_to_coeffs(quantized_coeffs_arr, coeff_slices, output_format='wavedec2')
+
+        # Reconstruct image
+        blocky_data = pywt.waverec2(quantized_coeffs, 'haar')
+        
+        # Convert data back to image
+        blocky_image = Image.fromarray(np.clip(blocky_data, 0, 255).astype('uint8'))
+        
+        return blocky_image
+    
+    
+    # Helper function to get Areas easier
+    def getArea(x, y, size):
+        return (x, y, x + size, y + size)
+    
         
     def run(self):
-        img = Image.open(self.imagePath)
+        # Load Image, convert to RGBA (for Alpha channel)
+        img_org = Image.open(self.imagePath)
+        img_org = img_org.convert("RGBA")
         
-        (width, height) = img.size
-        w, h = (math.floor(width/4), math.floor(height/4))
-        
-        gray = img.convert('L')
-        gray = gray.filter(ImageFilter.UnsharpMask)
-        gray = gray.filter(ImageFilter.GaussianBlur)
-        gray = gray.resize((w, h), resample=Image.Resampling.NEAREST)
-        print(gray.getextrema())
-        (width, height) = gray.size
-        
-        relevant = []
-        middle = []
-        rect_helper = []
-        
-        sub_rect = []
-        sub_middle = []
-        
-        draw = ImageDraw.Draw(img)
-        gray_copy = gray.copy()
-        draw_gray = ImageDraw.Draw(gray_copy)
-        
-        #gray.save(self.dsiftPath)
-        #self.finished.emit()
-        #return
-        
+        # Create copy to draw on
+        img_copy = Image.new("RGBA", img_org.size, (255, 255, 255, 0))
+        draw = ImageDraw.Draw(img_copy)
 
-        stepsize = self.blockSize * 2
-
-        for l_x in range(0, width, stepsize):
-            u_x = l_x + stepsize
-
-            if (u_x > width):
-                continue
+        img_gray = img_org.convert('L')
+        
+        (width, height) = img_org.size
+        (w, h) = (width, height)
             
-            for l_y in range(0, height, stepsize):
-                u_y = l_y + stepsize
-                
-                if (u_y > height):
+        scale = w / 1024
+        w = 1024
+        h = math.floor(h / scale)
+            
+            
+        img_resize = img_gray.resize((w, h), resample=Image.Resampling.NEAREST)
+        
+        
+        qXMax = math.floor(w / self.frameSize) * math.floor(self.frameSize/2)
+        qYMax = math.floor(h / self.frameSize) * math.floor(self.frameSize/2)
+        qFramesize= math.floor(self.frameSize/2)
+        
+        quant_image = Image.new("L", (qXMax, qYMax))
+        
+        
+        
+        # Helper function to get Areas easier
+        def getArea(x, y, size):
+            return (x, y, x + size, y + size)
+
+        
+        # ----- First loop
+        # This loop goes through the image in a grid
+        # It quantizes the image to make it more efficient to handle
+        for x in range(0, w, self.frameSize):
+            for y in range(0, h, self.frameSize):
+                if x + self.frameSize > w or y + self.frameSize > h:
                     continue
-                
-                area = (l_x, l_y, u_x, u_y)
-                
-                testing_image = gray.crop(area)
-                
-                stat = ImageStat.Stat(testing_image)
-                std_dev = stat.stddev
-            
-
-                if std_dev[0] >= self.minDetail:
-                    relevant.append(testing_image)
-                    x = math.floor(l_x + (stepsize / 2))
-                    y = math.floor(l_y + (stepsize / 2))
+                else:    
+                    compare_img = img_resize.crop(getArea(x, y, self.frameSize))
                     
-                    draw_gray.rectangle(area)
-                    draw_gray.text((l_x + 1, l_y), str(math.floor(std_dev[0])))
-                                   
-                    sub_middle.append((x, y))
+                    # Quantize Colors of each frame depending on standard deviation
+                    stat = ImageStat.Stat(compare_img)
+                    compare_img = compare_img.quantize((math.floor(stat.stddev[0]) + 1) * 3)
                     
-                    rect_helper.append([(l_x * 4, l_y * 4), (u_x * 4, u_y * 4)])
-                    sub_rect.append(area)
-
-        #gray_copy.save(self.dsiftPath)
-        #self.finished.emit()
-        #return
-    
-    # Idee: Nur felder vergleichen die in der nähe der anderen Standardabweichung sind?
-
-        rect = []
-        working_images = []
+                    # Main quantizing step using jpeg style compression but with haar-wavelet
+                    compressed = self.quantize(compare_img, scale=(8, 8), level=3)
+                    
+                    # resize the image to fit on quantized image
+                    compressed = compressed.resize((qFramesize, qFramesize))
+                    
+                    # Paste on quantized image
+                    (quantX, quantY) = (math.floor(x/2), math.floor(y/2))
+                    quant_image.paste(compressed, (quantX, quantY))
+                    
+        # hashLib saves 2 hashes for each frame in the image:
+        # [0] = A pHash of the larger Area of the Frame
+        # [1] = An array of all average hashes
         
-        for index, image in enumerate(relevant):
-
-            l_x = 0
-            l_y = 0
-            u_x, u_y = image.size
-            m_x = math.floor(u_x/2)
-            m_y = math.floor(u_y/2)
-            
-            sub_areas = [
-                (l_x, l_y, m_x, m_y), 
-                (m_x, l_y, u_x, m_y), 
-                (l_x, m_y, m_x, u_y), 
-                (m_x, m_y, u_x, u_y)
-                ]
-            
-            real_l, real_u = rect_helper[index]
-            real = (real_l[0], real_l[1], real_l[0], real_l[1])
-
-            for a in sub_areas:
-                gray_koords = tuple(map(lambda i, j: i + (j/4), a, real))
-                working_images.append(gray.crop(gray_koords))
-                
-                
-                rect.append(tuple(map(lambda i, j: (i * 4) + j, a, real)))
-                middle_x = gray_koords[0] + (u_x / 4)
-                middle_y = gray_koords[1] + (u_y / 4) 
-                middle.append((middle_x * 4, middle_y * 4))
-            
+        hashLib = []
         
-        hashmap = []
+        half = math.floor((self.frameSize * scale) / 2)
         
-        if self.hashMode == 0:
-            for image in working_images:
-                hashmap.append(imagehash.colorhash(image))
+        # Helper function to convert quant koords to real koords
+        def toReal(coord):
+            return coord * scale * 2
         
-        if self.hashMode == 1:
-            for image in working_images:
-                hashmap.append(imagehash.average_hash(image))
-        elif self.hashMode == 2:
-            for image in working_images:
-                hashmap.append(imagehash.phash(image))
-        elif self.hashMode == 3:
-            for image in working_images:
-                hashmap.append(imagehash.dhash(image))
-        elif self.hashMode == 4:
-            for image in working_images:
-                hashmap.append(imagehash.whash(image))
-        elif self.hashMode == 5:
-            for image in working_images:
-                hashmap.append(imagehash.crop_resistant_hash(image))
-                
-        imagehash.colorhash
-                
         
-        for index, image in enumerate(working_images):
-            hash = hashmap[index]
-            
-            for i in range(index + 1, len(working_images)):
-                hash_comp = hashmap[i]
+        # ----- Second Loop
+        # Iterates over the previously generated quantized frame grid
+        # This loop does all the hash-generating, filtering and comparing work
+        # Draws markers at the end
+        for y in range (0, qYMax, qFramesize):
+            for x in range(0, qXMax, qFramesize):
                 
-                #temp_img = img.copy()
-                #draw_temp = ImageDraw.Draw(temp_img)
+                # Get standard deviation of current frame
+                compare_img = quant_image.crop(getArea(x, y, qFramesize))
+                stat = ImageStat.Stat(compare_img)
                 
-                #draw_temp.rectangle(rect[index], outline="green", width=1)
-                #draw_temp.rectangle(rect[i], outline="blue", width=1)
-                #draw_temp.line([middle[index], middle[i]], fill=(0, 255, 255), width=2)
-
-                if hash - hash_comp < self.minSimilar:
-                    draw.line([middle[index], middle[i]], fill=(255, 0, 0), width=2)
-                    draw.rectangle(rect[index], outline="red", width=1)
-                    draw.rectangle(rect[i], outline="red", width=1)
+                # Only work with frames that are above a certain detail threshold
+                if stat.stddev[0] > self.minDetail:
+                    
+                    # Generate pHash for 3x3 frame-grid around the central frame
+                    # This is used to very generically compare two frames to see if a more detailed check is worthwhile
+                    compare_img = quant_image.crop(getArea(x - qFramesize, y - qFramesize, qFramesize * 3))
+                    phash = imagehash.phash(compare_img)
                     
                     
-        print("done with " + str(self.minSimilar))
+                    # This stores all average hashes of all frames that share at least 1 pixel with the current frame
+                    # this may be overkill but gives pretty good results
+                    allHashesOfFrame = []
+                    allHashesOfFrame.clear()
                     
-        img.save(self.dsiftPath)
+                    # First hash is generated before the main generation loop
+                    qSubimage = quant_image.crop((x - qFramesize + 1, 
+                                                y - qFramesize + 1, 
+                                                x + 2, 
+                                                y + 1))
+                    
+                    subDhash = imagehash.average_hash(qSubimage)
+                    
+                    allHashesOfFrame.append([subDhash, (x - qFramesize + 1, y - qFramesize + 1)])
+                    
+                    # Main hash generation loop
+                    for yQ in range(y - qFramesize + 2, y + (2*qFramesize) - 1, 2):
+                        for xQ in range(x - qFramesize + 1, x + (2*qFramesize) - 1, 2):
+                            qSubimage = quant_image.crop((xQ, yQ, xQ+qFramesize, yQ+qFramesize))
+                            
+                            subDhash = imagehash.average_hash(qSubimage)
+                            
+                            # if last hash was the same as this hash, dont store it (just for some performance)
+                            if allHashesOfFrame[-1][0] != subDhash:
+                                allHashesOfFrame.append([subDhash, (xQ, yQ)])
+                    
+                    
+                    # This loop compares the current frame with all other known frames
+                    for hashbundle in hashLib:
+                        
+                        # This is the very general phash comparison
+                        # This primarily acts like a filter
+                        if hashbundle[0] - phash < self.pHashThreshold:
+                            matches = []
+                            
+                            # If the phash is OK, compare all current ahashes with the ahashes of that frame
+                            for index, dHashA in enumerate(allHashesOfFrame):
+                                # clone detection already found a clone
+                                # this is more performant, but draws incomplete lines so has been commented out for now
+                                #if len(matches) > 300:
+                                #    break
+                                
+                                for i in range(index, len(hashbundle[1])):
+                                    dHashB = hashbundle[1][i]
+                                    if dHashA[0] - dHashB[0] < self.dHashThreshold:
+                                        # save both coordinates to draw lines and frames later
+                                        matches.append((dHashA[1], dHashB[1]))
+
+                            # If a minimum amount of matches has been made:
+                            if len(matches) > 250:
+                                # Draw all the frames that have matched!
+                                for match in matches:
+                                    areaA = (toReal(match[0][0]), toReal(match[0][1]), toReal(match[0][0]) + self.frameSize * scale, toReal(match[0][1]) + self.frameSize * scale)
+                                    
+                                    draw.rectangle(areaA, fill=(0, 128, 0, 32))
+
+                                    areaB = (toReal(match[1][0]), toReal(match[1][1]), toReal(match[1][0]) + self.frameSize * scale, toReal(match[1][1]) + self.frameSize * scale)
+                                    
+                                    draw.rectangle(areaB, fill=(0, 128, 0, 32))
+                                    
+                                    shape = [(areaA[0] + half, areaA[1] + half),(areaB[0] + half, areaB[1] + half)]
+                                    
+                                    draw.line(shape, fill=(0, 0, 128, 32))
+                                    
+                    # Add the frame we just handled to the list
+                    hashLib.append([phash, allHashesOfFrame])
+                                    
+        
+        out = Image.alpha_composite(img_org, img_copy)
+        out.save(self.clonePath)
         self.finished.emit()
         return
-                    
-            
-            
-    def getHash(self, img):
-        height, width = img.shape
-        pt_array = np.empty([height * width])
-        i = 0
-        
-        for x in range(height):
-            for y in range(width):
-                pt = img[x, y]
-                pt_array[i] = pt
-                i += 1
-                #print(pt)
-                #print(type(pt))
-        
-        bytes = pt_array.tobytes()
-
-        return bytes.hex()
-    
-    def hammingDistance(self, a, b):
-        if len(a) == len(b):
-            count = 0
-            i = 0
-            
-            while i < len(a):
-                if a[i] != b[i]:
-                    count += 1
-                i += 1
-            
-            return count
-        else:
-            return 500
-        

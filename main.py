@@ -349,7 +349,7 @@ class Imestigator(QMainWindow):
         
         blocksize_label = QLabel("Block size")
         
-        self.CLONE_AUTO_SLIDER_BLOCKSIZE = self.hSlider(8, 4, 64)
+        self.CLONE_AUTO_SLIDER_BLOCKSIZE = self.hSlider(16, 4, 64)
         self.CLONE_AUTO_SLIDER_BLOCKSIZE.sliderReleased.connect(self.updateClone)
         self.CLONE_AUTO_SLIDER_BLOCKSIZE.valueChanged.connect(cloneClick)
         self.CLONE_AUTO_SLIDER_BLOCKSIZE.sliderPressed.connect(sliderDisabler)
@@ -361,28 +361,20 @@ class Imestigator(QMainWindow):
         self.CLONE_AUTO_SLIDER_DETAIL.valueChanged.connect(cloneClick)
         self.CLONE_AUTO_SLIDER_DETAIL.sliderPressed.connect(sliderDisabler)
         
-        min_similar_label = QLabel("Minimum similarity")
+        min_similar_pHash_label = QLabel("pHash Threshold")
         
-        self.CLONE_AUTO_SLIDER_SIMILAR = self.hSlider(10, 1, 25)
-        self.CLONE_AUTO_SLIDER_SIMILAR.sliderReleased.connect(self.updateClone)
-        self.CLONE_AUTO_SLIDER_SIMILAR.valueChanged.connect(cloneClick)
-        self.CLONE_AUTO_SLIDER_SIMILAR.sliderPressed.connect(sliderDisabler)
+        self.CLONE_AUTO_SLIDER_SIMILAR_P = self.hSlider(20, 10, 40)
+        self.CLONE_AUTO_SLIDER_SIMILAR_P.sliderReleased.connect(self.updateClone)
+        self.CLONE_AUTO_SLIDER_SIMILAR_P.valueChanged.connect(cloneClick)
+        self.CLONE_AUTO_SLIDER_SIMILAR_P.sliderPressed.connect(sliderDisabler)
         
-        hashing_algo_label = QLabel("Hashing algorithm")
+        min_similar_dHash_label = QLabel("dHash Threshold")
         
-        self.CLONE_AUTO_HASH_ALGO_RADIO = []
+        self.CLONE_AUTO_SLIDER_SIMILAR_D = self.hSlider(7, 1, 25)
+        self.CLONE_AUTO_SLIDER_SIMILAR_D.sliderReleased.connect(self.updateClone)
+        self.CLONE_AUTO_SLIDER_SIMILAR_D.valueChanged.connect(cloneClick)
+        self.CLONE_AUTO_SLIDER_SIMILAR_D.sliderPressed.connect(sliderDisabler)
         
-        algo_names = ["Color", "Average", "Perceptual", "Difference", "Wavelet", "Crop-Resistant"]
-        
-        for item in algo_names:
-            radio = QRadioButton(item)
-            radio.toggled.connect(self.updateClone)
-            self.CLONE_AUTO_HASH_ALGO_RADIO.append(radio)
-            
-            
-        self.CLONE_AUTO_HASH_ALGO_RADIO[0].toggle()
-        
-
         
         
         auto_layout.addWidget(blocksize_label)
@@ -393,13 +385,13 @@ class Imestigator(QMainWindow):
         auto_layout.addWidget(self.CLONE_AUTO_SLIDER_DETAIL)
         auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_DETAIL))
         
-        auto_layout.addWidget(min_similar_label)
-        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR)
-        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR))
+        auto_layout.addWidget(min_similar_pHash_label)
+        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR_P)
+        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR_P))
         
-        auto_layout.addWidget(hashing_algo_label)
-        for item in self.CLONE_AUTO_HASH_ALGO_RADIO:
-            auto_layout.addWidget(item)
+        auto_layout.addWidget(min_similar_dHash_label)
+        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR_D)
+        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR_D))
         
         
         self.CLONE_AUTO_GROUPBOX.setLayout(auto_layout)
@@ -633,35 +625,30 @@ class Imestigator(QMainWindow):
         
         self.CLR_WORKER = ColorWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 100, 100, 100, self.CURRENT_FILE.images[1])
         self.ELA_WORKER = ELAWorker(
-                        self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
-                        self.CURRENT_FILE.images[2], 
-                        q=self.ELA_SLIDER.value(), 
-                        offset_x=self.ELA_OFFSET_SLIDER_X.value(), 
-                        offset_y=self.ELA_OFFSET_SLIDER_Y.value()
-                        )
+            self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+            self.CURRENT_FILE.images[2], 
+            q=self.ELA_SLIDER.value(), 
+            offset_x=self.ELA_OFFSET_SLIDER_X.value(), 
+            offset_y=self.ELA_OFFSET_SLIDER_Y.value()
+            )
         
         self.NOA_WORKER = NoiseWorker(
-                    self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
-                    self.CURRENT_FILE.images[3], 
-                    self.NOA_SLIDER_FILTER_INTENSITY.value(), 
-                    self.NOA_SLIDER_FILTER_BRIGHTNESS.value(),
-                    useMedian=self.NOA_USEMEDIAN.isChecked(),
-                    subtractEdges=self.NOA_SUBTRACTEDGES.isChecked()
-                    )
-        
-        selected = 0
-        for index, option in enumerate(self.CLONE_AUTO_HASH_ALGO_RADIO):
-                    if option.isChecked():
-                        selected = index
-                        break
+            self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+            self.CURRENT_FILE.images[3], 
+            self.NOA_SLIDER_FILTER_INTENSITY.value(), 
+            self.NOA_SLIDER_FILTER_BRIGHTNESS.value(),
+            useMedian=self.NOA_USEMEDIAN.isChecked(),
+            subtractEdges=self.NOA_SUBTRACTEDGES.isChecked()
+            )
                     
         self.CLONE_AUTO_WORKER = blockCompareWorker(
             self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
             self.CURRENT_FILE.images[4], 
-            self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
+            block_size=self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
             min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), 
-            min_similar=self.CLONE_AUTO_SLIDER_SIMILAR.value(), 
-            hash_mode=selected)
+            dHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_D.value(), 
+            pHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_P.value()
+            )
         
         self.CLONE_DETECTING_WORKER = detectingSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[5])
         
@@ -744,20 +731,14 @@ class Imestigator(QMainWindow):
         if self.CURRENT_FILE != None:
             if self.CLONE_AUTO_WORKER.isRunning() or self.CLONE_DETECTING_WORKER.isRunning():
                 QTimer.singleShot(500, self.updateClone)
-            else:
-                selected = 0
-                for index, option in enumerate(self.CLONE_AUTO_HASH_ALGO_RADIO):
-                    if option.isChecked():
-                        selected = index
-                        break
-                    
+            else:        
                 self.CLONE_AUTO_WORKER = blockCompareWorker(
                     self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
                     self.CURRENT_FILE.images[4], 
                     self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
                     min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), 
-                    min_similar=self.CLONE_AUTO_SLIDER_SIMILAR.value(), 
-                    hash_mode=selected
+                    dHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_D.value(), 
+                    pHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_P.value()
                     )
                 
                 self.CLONE_AUTO_WORKER.finished.connect(self.scaleImage)
