@@ -9,7 +9,7 @@ import pywt
 
 
 class blockCompareWorker(QThread):
-    def __init__(self, imagePath, clonePath, block_size, min_detail, dHash_thresh, pHash_thresh, parent=None):
+    def __init__(self, imagePath, clonePath, block_size, min_detail, aHash_thresh, pHash_thresh, min_matches = 10, parent=None):
         super().__init__(parent)
         self.imagePath = imagePath
         self.clonePath = clonePath
@@ -18,8 +18,9 @@ class blockCompareWorker(QThread):
         
         self.minDetail = min_detail
         
-        self.dHashThreshold = dHash_thresh
+        self.aHashThreshold = aHash_thresh
         self.pHashThreshold = pHash_thresh
+        self.minMatches = min_matches
     
     
     # convert a image using haar wavelets in a jpeg-style compression 
@@ -49,11 +50,6 @@ class blockCompareWorker(QThread):
         return blocky_image
     
     
-    # Helper function to get Areas easier
-    def getArea(x, y, size):
-        return (x, y, x + size, y + size)
-    
-        
     def run(self):
         # Load Image, convert to RGBA (for Alpha channel)
         img_org = Image.open(self.imagePath)
@@ -81,6 +77,28 @@ class blockCompareWorker(QThread):
         qFramesize= math.floor(self.frameSize/2)
         
         quant_image = Image.new("L", (qXMax, qYMax))
+        
+        def getAllHashes(coords):
+            x, y = coords
+            
+            # This stores all average hashes of half of all frames that share at least 1 pixel with the current frame
+            allHashesOfFrame = []
+            
+            # Main hash generation loop
+            for yQ in range(y - qFramesize + 2, y + (2*qFramesize) - 1, 2):
+                for xQ in range(x - qFramesize + 1, x + (2*qFramesize) - 1, 2):
+                    qSubimage = quant_image.crop((xQ, yQ, xQ+qFramesize, yQ+qFramesize))
+                    
+                    # Compare with stddev again since frame might be out of bounds
+                    stat = ImageStat.Stat(qSubimage)
+                    
+                    if stat.stddev[0] > self.minDetail:
+                        subAhash = imagehash.average_hash(qSubimage, hash_size=qFramesize)
+                        allHashesOfFrame.append([subAhash, (xQ, yQ)])
+
+                        
+                        
+            return allHashesOfFrame
         
         
         
@@ -116,7 +134,7 @@ class blockCompareWorker(QThread):
         # hashLib saves 2 hashes for each frame in the image:
         # [0] = A pHash of the larger Area of the Frame
         # [1] = An array of all average hashes
-        
+        # [2] = Coords of the frame
         hashLib = []
         
         half = math.floor((self.frameSize * scale) / 2)
@@ -132,6 +150,8 @@ class blockCompareWorker(QThread):
         # Draws markers at the end
         for y in range (0, qYMax, qFramesize):
             for x in range(0, qXMax, qFramesize):
+                if x + qFramesize > qYMax or y + qFramesize > qYMax:
+                    continue
                 
                 # Get standard deviation of current frame
                 compare_img = quant_image.crop(getArea(x, y, qFramesize))
@@ -146,31 +166,8 @@ class blockCompareWorker(QThread):
                     phash = imagehash.phash(compare_img)
                     
                     
-                    # This stores all average hashes of all frames that share at least 1 pixel with the current frame
-                    # this may be overkill but gives pretty good results
-                    allHashesOfFrame = []
-                    allHashesOfFrame.clear()
-                    
-                    # First hash is generated before the main generation loop
-                    qSubimage = quant_image.crop((x - qFramesize + 1, 
-                                                y - qFramesize + 1, 
-                                                x + 2, 
-                                                y + 1))
-                    
-                    subDhash = imagehash.average_hash(qSubimage)
-                    
-                    allHashesOfFrame.append([subDhash, (x - qFramesize + 1, y - qFramesize + 1)])
-                    
-                    # Main hash generation loop
-                    for yQ in range(y - qFramesize + 2, y + (2*qFramesize) - 1, 2):
-                        for xQ in range(x - qFramesize + 1, x + (2*qFramesize) - 1, 2):
-                            qSubimage = quant_image.crop((xQ, yQ, xQ+qFramesize, yQ+qFramesize))
-                            
-                            subDhash = imagehash.average_hash(qSubimage)
-                            
-                            # if last hash was the same as this hash, dont store it (just for some performance)
-                            if allHashesOfFrame[-1][0] != subDhash:
-                                allHashesOfFrame.append([subDhash, (xQ, yQ)])
+                    # All hashes of the Frame, only gets filled if there is an actuall pHash match
+                    allHashesOfFrame = [] 
                     
                     
                     # This loop compares the current frame with all other known frames
@@ -179,23 +176,30 @@ class blockCompareWorker(QThread):
                         # This is the very general phash comparison
                         # This primarily acts like a filter
                         if hashbundle[0] - phash < self.pHashThreshold:
+                            
+                            # Calculate the average hashes
+                            allHashesOfFrame = getAllHashes((x, y))
+                            
+                            if len(hashbundle[1]) == 0:
+                                hashbundle[1] = getAllHashes(hashbundle[2])
+                            
                             matches = []
                             
                             # If the phash is OK, compare all current ahashes with the ahashes of that frame
-                            for index, dHashA in enumerate(allHashesOfFrame):
+                            for index, aHashA in enumerate(allHashesOfFrame):
                                 # clone detection already found a clone
                                 # this is more performant, but draws incomplete lines so has been commented out for now
                                 #if len(matches) > 300:
                                 #    break
                                 
                                 for i in range(index, len(hashbundle[1])):
-                                    dHashB = hashbundle[1][i]
-                                    if dHashA[0] - dHashB[0] < self.dHashThreshold:
+                                    aHashB = hashbundle[1][i]
+                                    if aHashA[0] - aHashB[0] < self.aHashThreshold:
                                         # save both coordinates to draw lines and frames later
-                                        matches.append((dHashA[1], dHashB[1]))
+                                        matches.append((aHashA[1], aHashB[1]))
 
                             # If a minimum amount of matches has been made:
-                            if len(matches) > 250:
+                            if len(matches) > self.minMatches:
                                 # Draw all the frames that have matched!
                                 for match in matches:
                                     areaA = (toReal(match[0][0]), toReal(match[0][1]), toReal(match[0][0]) + self.frameSize * scale, toReal(match[0][1]) + self.frameSize * scale)
@@ -211,7 +215,7 @@ class blockCompareWorker(QThread):
                                     draw.line(shape, fill=(0, 0, 128, 32))
                                     
                     # Add the frame we just handled to the list
-                    hashLib.append([phash, allHashesOfFrame])
+                    hashLib.append([phash, allHashesOfFrame, (x, y)])
                                     
         
         out = Image.alpha_composite(img_org, img_copy)

@@ -356,7 +356,7 @@ class Imestigator(QMainWindow):
         
         min_detail_label = QLabel("Minimum detail level")
         
-        self.CLONE_AUTO_SLIDER_DETAIL = self.hSlider(5, 1, 50)
+        self.CLONE_AUTO_SLIDER_DETAIL = self.hSlider(14, 1, 50)
         self.CLONE_AUTO_SLIDER_DETAIL.sliderReleased.connect(self.updateClone)
         self.CLONE_AUTO_SLIDER_DETAIL.valueChanged.connect(cloneClick)
         self.CLONE_AUTO_SLIDER_DETAIL.sliderPressed.connect(sliderDisabler)
@@ -368,12 +368,12 @@ class Imestigator(QMainWindow):
         self.CLONE_AUTO_SLIDER_SIMILAR_P.valueChanged.connect(cloneClick)
         self.CLONE_AUTO_SLIDER_SIMILAR_P.sliderPressed.connect(sliderDisabler)
         
-        min_similar_dHash_label = QLabel("dHash Threshold")
+        min_similar_aHash_label = QLabel("aHash Threshold")
         
-        self.CLONE_AUTO_SLIDER_SIMILAR_D = self.hSlider(7, 1, 25)
-        self.CLONE_AUTO_SLIDER_SIMILAR_D.sliderReleased.connect(self.updateClone)
-        self.CLONE_AUTO_SLIDER_SIMILAR_D.valueChanged.connect(cloneClick)
-        self.CLONE_AUTO_SLIDER_SIMILAR_D.sliderPressed.connect(sliderDisabler)
+        self.CLONE_AUTO_SLIDER_SIMILAR_A = self.hSlider(7, 1, 25)
+        self.CLONE_AUTO_SLIDER_SIMILAR_A.sliderReleased.connect(self.updateClone)
+        self.CLONE_AUTO_SLIDER_SIMILAR_A.valueChanged.connect(cloneClick)
+        self.CLONE_AUTO_SLIDER_SIMILAR_A.sliderPressed.connect(sliderDisabler)
         
         
         
@@ -389,9 +389,9 @@ class Imestigator(QMainWindow):
         auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR_P)
         auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR_P))
         
-        auto_layout.addWidget(min_similar_dHash_label)
-        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR_D)
-        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR_D))
+        auto_layout.addWidget(min_similar_aHash_label)
+        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR_A)
+        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR_A))
         
         
         self.CLONE_AUTO_GROUPBOX.setLayout(auto_layout)
@@ -646,7 +646,7 @@ class Imestigator(QMainWindow):
             self.CURRENT_FILE.images[4], 
             block_size=self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
             min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), 
-            dHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_D.value(), 
+            aHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_A.value(), 
             pHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_P.value()
             )
         
@@ -737,7 +737,7 @@ class Imestigator(QMainWindow):
                     self.CURRENT_FILE.images[4], 
                     self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
                     min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), 
-                    dHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_D.value(), 
+                    aHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_A.value(), 
                     pHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_P.value()
                     )
                 
