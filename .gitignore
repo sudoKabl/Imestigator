@@ -1,6 +1,1 @@
-app/__pycache__/autoSIFT.cpython-311.pyc
-app/__pycache__/detectingSIFT.cpython-311.pyc
-app/__pycache__/ImageDataHolder.cpython-311.pyc
-app/__pycache__/ela.cpython-311.pyc
-app/__pycache__/color.cpython-311.pyc
-app/__pycache__/noise.cpython-311.pyc
+app/__pycache__/*
