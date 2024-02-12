@@ -4,14 +4,14 @@ import cv2
 import numpy as np
 
 class NoiseWorker(QThread):
-    def __init__(self, imagePath, noisePath, size, brightness, useMedian, subtractEdges, parent=None):
+    def __init__(self, imagePath, noisePath, size, brightness, useSharp, subtractEdges, parent=None):
         super().__init__(parent)
         self.imagePath = imagePath
         self.noisePath = noisePath
         
         self.size = size
         self.brightness = brightness / 100
-        self.useMedian = useMedian
+        self.useSharp = useSharp
         self.subtractEdges = subtractEdges
 
         
@@ -19,10 +19,11 @@ class NoiseWorker(QThread):
         img_org = Image.open(self.imagePath)
         img_org = img_org.convert('RGB')
         
-        if self.useMedian:
-            filtered = img_org.filter(ImageFilter.MedianFilter(self.size))
-        else:
+        if self.useSharp:
             filtered = img_org.filter(ImageFilter.UnsharpMask(self.size))
+        else:
+            filtered = img_org.filter(ImageFilter.MedianFilter(self.size))
+            
         
         only_noise = ImageChops.subtract(img_org, filtered)
         

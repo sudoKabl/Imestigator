@@ -270,12 +270,12 @@ class Imestigator(QMainWindow):
         self.NOA_CONTENT = QWidget()
         noa_content_layout = QVBoxLayout()
         
-        self.NOA_USEMEDIAN = QCheckBox("Use Median Filter")
-        self.NOA_USEMEDIAN.clicked.connect(self.updateNoa)
+        self.NOA_USESHARP = QCheckBox("Use sharpening")
+        self.NOA_USESHARP.clicked.connect(self.updateNoa)
         self.NOA_SUBTRACTEDGES = QCheckBox("Edge reduction")
         self.NOA_SUBTRACTEDGES.clicked.connect(self.updateNoa)
         
-        noa_content_layout.addWidget(self.NOA_USEMEDIAN)
+        noa_content_layout.addWidget(self.NOA_USESHARP)
         noa_content_layout.addWidget(self.NOA_SUBTRACTEDGES)
         
         def noaClick():
@@ -637,7 +637,7 @@ class Imestigator(QMainWindow):
             self.CURRENT_FILE.images[3], 
             self.NOA_SLIDER_FILTER_INTENSITY.value(), 
             self.NOA_SLIDER_FILTER_BRIGHTNESS.value(),
-            useMedian=self.NOA_USEMEDIAN.isChecked(),
+            useSharp=self.NOA_USESHARP.isChecked(),
             subtractEdges=self.NOA_SUBTRACTEDGES.isChecked()
             )
                     
@@ -720,7 +720,7 @@ class Imestigator(QMainWindow):
                     self.CURRENT_FILE.images[3], 
                     self.NOA_SLIDER_FILTER_INTENSITY.value(), 
                     self.NOA_SLIDER_FILTER_BRIGHTNESS.value(),
-                    useMedian=self.NOA_USEMEDIAN.isChecked(),
+                    useSharp=self.NOA_USESHARP.isChecked(),
                     subtractEdges=self.NOA_SUBTRACTEDGES.isChecked()
                     )
                 

@@ -53,8 +53,8 @@ def all():
             (areaB, pHashB) = harry[i]
             
             if pHashA - pHashB < 20:
-                #draw.rectangle(areaA, fill=(0, 128, 0))
-                #draw.rectangle(areaB, fill=(0, 128, 0))
+                draw.rectangle(areaA, fill=(0, 128, 0))
+                draw.rectangle(areaB, fill=(0, 128, 0))
 
                 shape = [(areaA[0], areaA[1]),(areaB[0], areaB[1])]
                                 
