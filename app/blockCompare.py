@@ -119,7 +119,10 @@ class blockCompareWorker(QThread):
                     
                     # Quantize Colors of each frame depending on standard deviation
                     stat = ImageStat.Stat(compare_img)
-                    compare_img = compare_img.quantize((math.floor(stat.stddev[0]) + 1) * 3)
+                    
+                    if (math.floor(stat.stddev[0]) + 1) * 3 < 255:
+                        compare_img = compare_img.quantize((math.floor(stat.stddev[0]) + 1) * 3)
+                    
                     
                     # Main quantizing step using jpeg style compression but with haar-wavelet
                     compressed = self.quantize(compare_img, scale=(8, 8), level=3)

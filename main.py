@@ -1,4 +1,4 @@
-from PyQt5.QtGui import QResizeEvent
+from PyQt5.QtGui import QMouseEvent, QResizeEvent
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -8,10 +8,75 @@ import math
 from app.ImageDataHolder import ImageData
 
 from app.color import ColorWorker
+from app.custom import CustomWorker
 from app.ela import ELAWorker
 from app.noise import NoiseWorker
 from app.blockCompare import blockCompareWorker
 from app.detectingSIFT import detectingSIFTWorker
+from app.aiCloneDetection import aiCloneWorker
+
+class DragCheckbox(QCheckBox):
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragStartPosition = event.pos()
+        return super().mousePressEvent(event)
+        
+
+            
+    def mouseMoveEvent(self, e):
+        if e.buttons() != Qt.LeftButton:
+            return
+        if ((e.pos() - self.dragStartPosition).manhattanLength() < QApplication.startDragDistance()):
+            return
+
+        drag = QDrag(self)
+        mimeData = QMimeData()
+        mimeData.setText(self.text())
+        drag.setMimeData(mimeData)
+        drag.exec()
+            
+class DragGroubox(QGroupBox):
+    elementMoved = pyqtSignal()
+    
+    def __init__(self, title, parent=None):
+        super().__init__(title, parent)
+        self.setAcceptDrops(True)
+        self.layoutSaver = QVBoxLayout()
+    
+    def reset(self):
+        for n in range(self.layoutSaver.count()):
+            w = self.layoutSaver.itemAt(0).widget()
+            self.layoutSaver.removeWidget(w)
+    
+    def addCheckbox(self, checkbox):
+        self.layoutSaver.addWidget(checkbox)
+        
+    def dragEnterEvent(self, event):
+        event.accept()
+
+
+    def dropEvent(self, e):
+        pos = e.pos()
+        widget = e.source()
+        half = widget.size().height() // 2
+        a_y = pos.y()
+        
+        for n in range(self.layoutSaver.count()):
+            w = self.layoutSaver.itemAt(n).widget()
+            b_y = w.y()
+            
+            if a_y <= b_y + half:
+                if n == 0:
+                    self.layoutSaver.insertWidget(0, widget)
+                else:
+                    self.layoutSaver.insertWidget(n-1, widget)
+                e.accept()
+                return
+            
+        self.layoutSaver.insertWidget(self.layoutSaver.count(), widget)
+        e.accept()
+        self.elementMoved.emit()
+        
 
 class Imestigator(QMainWindow):
     FILESTATE = True
@@ -70,8 +135,7 @@ class Imestigator(QMainWindow):
         
         
         self.central_widget.setLayout(self.main_layout)
-        
-        
+          
     
     def initFileColumn(self):
         file_column = QVBoxLayout()
@@ -152,17 +216,15 @@ class Imestigator(QMainWindow):
         file_column.addWidget(self.tree)
         
         return file_column
-        
-        
-    def initModesColumn(self):
-        layout = QVBoxLayout()
-        
-        # ----- No filter
+    
+    # --- Function for creating individual method buttons, just so its a little more readable
+    
+    def createNoFilter(self):
         self.NONE_BUTTON = QPushButton("None")
         self.NONE_BUTTON.setToolTip("View original image")
         self.NONE_BUTTON.clicked.connect(self.noneClicked)
         
-        # ----- Color correction
+    def createColorCorrection(self):
         self.COLOR_BUTTON = QPushButton("Color correction")
         self.COLOR_BUTTON.setToolTip("Change color composition of image")
         self.COLOR_BUTTON.clicked.connect(self.colorClicked)
@@ -202,8 +264,65 @@ class Imestigator(QMainWindow):
         
         self.BLUE_SLIDER.valueChanged.connect(self.updateColor)
         
+    def createCustomFilter(self):
+        self.CUSTOM_BUTTON = QPushButton("Custom Filters")
+        self.CUSTOM_BUTTON.setToolTip("Apply own, custom filters to image")
+        self.CUSTOM_BUTTON.clicked.connect(self.customFilterClicked)
         
-        # ----- Error level analysis
+        
+        self.listOfFilters = QGroupBox("Available Filters")
+        listOfFiltersLayout = QVBoxLayout()
+        
+        buttons = ["Grayscale", "Gaussian Blur", "Median Filter", "Adaptive Threshold", "Canny Edge", "Erosion", "Dilation"]
+
+        
+        self.listOfFilters.setLayout(listOfFiltersLayout)
+        
+        self.filterContainer = QScrollArea(self)
+        self.filterContainer.setWidgetResizable(True)
+        self.filterContainer.setMaximumHeight(450)
+        
+        self.filters = DragGroubox("Active Filters")
+
+        self.filters.elementMoved.connect(self.updateCustom)
+        
+        
+        def addFilter(name):
+            newBox = DragCheckbox(name)
+            newBox.setChecked(True)
+            
+            self.filters.addCheckbox(newBox)
+            
+            newBox.clicked.connect(lambda: self.updateCustom())
+            
+            self.updateCustom()
+
+        for button in buttons:
+            pushButton = QPushButton(button)
+            listOfFiltersLayout.addWidget(pushButton)
+            pushButton.clicked.connect(lambda checked, b=button: addFilter(b))
+            
+        self.CUSTOM_RESET = QPushButton("Reset Filters")
+        self.CUSTOM_RESET.clicked.connect(self.filters.reset)
+        self.CUSTOM_RESET.clicked.connect(self.updateCustom)
+        
+        self.filters.setLayout(self.filters.layoutSaver)
+        
+
+        self.listOfFilters.hide()
+        
+        self.filterContainer.setWidget(self.filters)
+        self.filterContainer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
+        self.filters.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        
+        self.filterContainer.hide()
+        
+        
+        self.CUSTOM_RESET.hide()
+        
+        
+
+    def createELA(self):
         self.ELA_BUTTON = QPushButton("Error Level Analysis")
         self.ELA_BUTTON.setToolTip("Perform Error Level Analysis")
         self.ELA_BUTTON.clicked.connect(self.elaClicked)
@@ -220,10 +339,9 @@ class Imestigator(QMainWindow):
         
         self.ELA_SLIDER.valueChanged.connect(elaClick)
         
-        def sliderDisabler():
-            self.SLIDER_IS_PRESSED = True
         
-        self.ELA_SLIDER.sliderPressed.connect(sliderDisabler)
+        
+        self.ELA_SLIDER.sliderPressed.connect(self.sliderDisabler)
         
         ela_l = QVBoxLayout()
         ela_l.addWidget(self.ELA_SLIDER)
@@ -240,14 +358,14 @@ class Imestigator(QMainWindow):
         self.ELA_OFFSET_SLIDER_X = self.hSlider(0, 0, 7)
         self.ELA_OFFSET_SLIDER_X.sliderReleased.connect(self.updateEla)
         self.ELA_OFFSET_SLIDER_X.valueChanged.connect(elaClick)
-        self.ELA_OFFSET_SLIDER_X.sliderPressed.connect(sliderDisabler)
+        self.ELA_OFFSET_SLIDER_X.sliderPressed.connect(self.sliderDisabler)
         
         label_y = QLabel("Y-Axis")
         
         self.ELA_OFFSET_SLIDER_Y = self.hSlider(0, 0, 7)
         self.ELA_OFFSET_SLIDER_Y.sliderReleased.connect(self.updateEla)
         self.ELA_OFFSET_SLIDER_Y.valueChanged.connect(elaClick)
-        self.ELA_OFFSET_SLIDER_Y.sliderPressed.connect(sliderDisabler)
+        self.ELA_OFFSET_SLIDER_Y.sliderPressed.connect(self.sliderDisabler)
         
         ela_o = QVBoxLayout()
         ela_o.addWidget(label_x)
@@ -261,8 +379,8 @@ class Imestigator(QMainWindow):
         self.ELA_OFFSET_GROUPBOX.setTitle("JPG Offset")
         self.ELA_OFFSET_GROUPBOX.hide()
         
-        # ----- Noise analysis
         
+    def createNoise(self):
         self.NOA_BUTTON = QPushButton("Noise Analysis")
         self.NOA_BUTTON.setToolTip("Perform general noise analysis")
         self.NOA_BUTTON.clicked.connect(self.noaClicked)
@@ -287,14 +405,14 @@ class Imestigator(QMainWindow):
         self.NOA_SLIDER_FILTER_INTENSITY = self.hSlider(3, 3, 15)
         self.NOA_SLIDER_FILTER_INTENSITY.sliderReleased.connect(self.updateNoa)
         self.NOA_SLIDER_FILTER_INTENSITY.valueChanged.connect(noaClick)
-        self.NOA_SLIDER_FILTER_INTENSITY.sliderPressed.connect(sliderDisabler)
+        self.NOA_SLIDER_FILTER_INTENSITY.sliderPressed.connect(self.sliderDisabler)
         
         noa_b_gb = QGroupBox()
         noa_b = QVBoxLayout()
         self.NOA_SLIDER_FILTER_BRIGHTNESS = self.hSlider(300, 1, 500)
         self.NOA_SLIDER_FILTER_BRIGHTNESS.sliderReleased.connect(self.updateNoa)
         self.NOA_SLIDER_FILTER_BRIGHTNESS.valueChanged.connect(noaClick)
-        self.NOA_SLIDER_FILTER_BRIGHTNESS.sliderPressed.connect(sliderDisabler)
+        self.NOA_SLIDER_FILTER_BRIGHTNESS.sliderPressed.connect(self.sliderDisabler)
         
         noa_l.addWidget(self.NOA_SLIDER_FILTER_INTENSITY)
         noa_l.addLayout(self.hSliderLabels(self.NOA_SLIDER_FILTER_INTENSITY))
@@ -313,93 +431,186 @@ class Imestigator(QMainWindow):
         self.NOA_CONTENT.setLayout(noa_content_layout)
         self.NOA_CONTENT.hide()
         
-        # ----- Clone detection
         
-        self.CLONE_BUTTON = QPushButton("Clone Detection")
-        self.CLONE_BUTTON.clicked.connect(self.cloneClicked)
+    def createSimpleCloneDetection(self):
+        self.SIMPLE_CLONE_BUTTON = QPushButton("Clone Detection (simple)")
+        self.SIMPLE_CLONE_BUTTON.setToolTip("Apply simple clone detection to image")
+        self.SIMPLE_CLONE_BUTTON.clicked.connect(self.simpleCloneClicked)
         
-        self.CLONE_RADIO_AUTO = QRadioButton("Frame by frame")
-        self.CLONE_RADIO_AUTO.toggled.connect(self.cloneRadioButtonToggled)
-        self.CLONE_RADIO_AUTO.toggle()
+        self.SIMPLE_CLONE_GROUPBOX = QGroupBox()
         
-        self.CLONE_RADIO_DETECTING = QRadioButton("SIFT + Object detection")
-        self.CLONE_RADIO_DETECTING.toggled.connect(self.cloneRadioButtonToggled)
-        self.CLONE_RADIO_DETECTING.setEnabled(False)
-        
-        clone_radiobuttons = QVBoxLayout()
-        clone_radiobuttons.addWidget(self.CLONE_RADIO_AUTO)
-        clone_radiobuttons.addWidget(self.CLONE_RADIO_DETECTING)
-        
-        self.CLONE_RADIO_GROUPBOX = QGroupBox()
-        self.CLONE_RADIO_GROUPBOX.setLayout(clone_radiobuttons)
-        self.CLONE_RADIO_GROUPBOX.setTitle("Comparison options")
-        self.CLONE_RADIO_GROUPBOX.hide()
-        
-        self.CLONE_AUTO_GROUPBOX = QGroupBox()
-        self.CLONE_DETECTING_GROUPBOX = QGroupBox()
-        
-        self.CLONE_AUTO_GROUPBOX.setTitle("Options")
-        self.CLONE_DETECTING_GROUPBOX.setTitle("Options")
+        self.SIMPLE_CLONE_GROUPBOX.setTitle("Options")
         
         def cloneClick():
             if self.SLIDER_IS_PRESSED == False:
-                self.updateClone()
+                self.updateSimpleClone()
         
-        auto_layout = QVBoxLayout()
+        simple_layout = QVBoxLayout()
         
         blocksize_label = QLabel("Block size")
         
-        self.CLONE_AUTO_SLIDER_BLOCKSIZE = self.hSlider(16, 4, 64)
-        self.CLONE_AUTO_SLIDER_BLOCKSIZE.sliderReleased.connect(self.updateClone)
-        self.CLONE_AUTO_SLIDER_BLOCKSIZE.valueChanged.connect(cloneClick)
-        self.CLONE_AUTO_SLIDER_BLOCKSIZE.sliderPressed.connect(sliderDisabler)
+        self.SIMPLE_CLONE_SLIDER_BLOCKSIZE = self.hSlider(16, 4, 64)
+        self.SIMPLE_CLONE_SLIDER_BLOCKSIZE.sliderReleased.connect(self.updateSimpleClone)
+        self.SIMPLE_CLONE_SLIDER_BLOCKSIZE.valueChanged.connect(cloneClick)
+        self.SIMPLE_CLONE_SLIDER_BLOCKSIZE.sliderPressed.connect(self.sliderDisabler)
         
         min_detail_label = QLabel("Minimum detail level")
         
-        self.CLONE_AUTO_SLIDER_DETAIL = self.hSlider(14, 1, 50)
-        self.CLONE_AUTO_SLIDER_DETAIL.sliderReleased.connect(self.updateClone)
-        self.CLONE_AUTO_SLIDER_DETAIL.valueChanged.connect(cloneClick)
-        self.CLONE_AUTO_SLIDER_DETAIL.sliderPressed.connect(sliderDisabler)
+        self.SIMPLE_CLONE_SLIDER_DETAIL = self.hSlider(14, 1, 50)
+        self.SIMPLE_CLONE_SLIDER_DETAIL.sliderReleased.connect(self.updateSimpleClone)
+        self.SIMPLE_CLONE_SLIDER_DETAIL.valueChanged.connect(cloneClick)
+        self.SIMPLE_CLONE_SLIDER_DETAIL.sliderPressed.connect(self.sliderDisabler)
         
         min_similar_pHash_label = QLabel("pHash Threshold")
         
-        self.CLONE_AUTO_SLIDER_SIMILAR_P = self.hSlider(20, 10, 40)
-        self.CLONE_AUTO_SLIDER_SIMILAR_P.sliderReleased.connect(self.updateClone)
-        self.CLONE_AUTO_SLIDER_SIMILAR_P.valueChanged.connect(cloneClick)
-        self.CLONE_AUTO_SLIDER_SIMILAR_P.sliderPressed.connect(sliderDisabler)
+        self.SIMPLE_CLONE_SLIDER_SIMILAR_P = self.hSlider(20, 10, 40)
+        self.SIMPLE_CLONE_SLIDER_SIMILAR_P.sliderReleased.connect(self.updateSimpleClone)
+        self.SIMPLE_CLONE_SLIDER_SIMILAR_P.valueChanged.connect(cloneClick)
+        self.SIMPLE_CLONE_SLIDER_SIMILAR_P.sliderPressed.connect(self.sliderDisabler)
         
         min_similar_aHash_label = QLabel("aHash Threshold")
         
-        self.CLONE_AUTO_SLIDER_SIMILAR_A = self.hSlider(7, 1, 25)
-        self.CLONE_AUTO_SLIDER_SIMILAR_A.sliderReleased.connect(self.updateClone)
-        self.CLONE_AUTO_SLIDER_SIMILAR_A.valueChanged.connect(cloneClick)
-        self.CLONE_AUTO_SLIDER_SIMILAR_A.sliderPressed.connect(sliderDisabler)
+        self.SIMPLE_CLONE_SLIDER_SIMILAR_A = self.hSlider(7, 1, 25)
+        self.SIMPLE_CLONE_SLIDER_SIMILAR_A.sliderReleased.connect(self.updateSimpleClone)
+        self.SIMPLE_CLONE_SLIDER_SIMILAR_A.valueChanged.connect(cloneClick)
+        self.SIMPLE_CLONE_SLIDER_SIMILAR_A.sliderPressed.connect(self.sliderDisabler)
+        
+        simple_layout.addWidget(blocksize_label)
+        simple_layout.addWidget(self.SIMPLE_CLONE_SLIDER_BLOCKSIZE)
+        simple_layout.addLayout(self.hSliderLabels(self.SIMPLE_CLONE_SLIDER_BLOCKSIZE))
+        
+        simple_layout.addWidget(min_detail_label)
+        simple_layout.addWidget(self.SIMPLE_CLONE_SLIDER_DETAIL)
+        simple_layout.addLayout(self.hSliderLabels(self.SIMPLE_CLONE_SLIDER_DETAIL))
+        
+        simple_layout.addWidget(min_similar_pHash_label)
+        simple_layout.addWidget(self.SIMPLE_CLONE_SLIDER_SIMILAR_P)
+        simple_layout.addLayout(self.hSliderLabels(self.SIMPLE_CLONE_SLIDER_SIMILAR_P))
+        
+        simple_layout.addWidget(min_similar_aHash_label)
+        simple_layout.addWidget(self.SIMPLE_CLONE_SLIDER_SIMILAR_A)
+        simple_layout.addLayout(self.hSliderLabels(self.SIMPLE_CLONE_SLIDER_SIMILAR_A))
         
         
-        
-        auto_layout.addWidget(blocksize_label)
-        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_BLOCKSIZE)
-        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_BLOCKSIZE))
-        
-        auto_layout.addWidget(min_detail_label)
-        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_DETAIL)
-        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_DETAIL))
-        
-        auto_layout.addWidget(min_similar_pHash_label)
-        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR_P)
-        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR_P))
-        
-        auto_layout.addWidget(min_similar_aHash_label)
-        auto_layout.addWidget(self.CLONE_AUTO_SLIDER_SIMILAR_A)
-        auto_layout.addLayout(self.hSliderLabels(self.CLONE_AUTO_SLIDER_SIMILAR_A))
+        self.SIMPLE_CLONE_GROUPBOX.setLayout(simple_layout)
+        self.SIMPLE_CLONE_GROUPBOX.hide()
         
         
-        self.CLONE_AUTO_GROUPBOX.setLayout(auto_layout)
-        self.CLONE_AUTO_GROUPBOX.hide()
+    def createAdvancedCloneDetection(self):
+        self.ADVANCED_CLONE_BUTTON = QPushButton("Clone Detection (advanced)")
+        self.ADVANCED_CLONE_BUTTON.setToolTip("Apply advanced clone detection to image")
+        self.ADVANCED_CLONE_BUTTON.clicked.connect(self.advancedCloneClicked)
         
+        self.ADVANCED_CLONE_GROUPBOX = QGroupBox()
+        
+        self.ADVANCED_CLONE_GROUPBOX.setTitle("Options")
+        
+        def cloneClick():
+            if self.SLIDER_IS_PRESSED == False:
+                self.updateAdvancedClone()
+        
+        advanced_layout = QVBoxLayout()
+        
+        self.ADVANCED_CLONE_HISTO = QCheckBox("Equalize histogram")
+        self.ADVANCED_CLONE_HISTO.clicked.connect(self.updateAdvancedClone)
+        advanced_layout.addWidget(self.ADVANCED_CLONE_HISTO)
+        
+        self.ADVANCED_CLONE_BLUR = QCheckBox("Blur Image")
+        advanced_layout.addWidget(self.ADVANCED_CLONE_BLUR)
+        
+        self.ADVANCED_CLONE_BLUR_SLIDER = self.hSlider(5, 1, 9)
+        self.ADVANCED_CLONE_BLUR_SLIDER.valueChanged.connect(cloneClick)
+        self.ADVANCED_CLONE_BLUR_SLIDER.sliderPressed.connect(self.sliderDisabler)
+        self.ADVANCED_CLONE_BLUR_SLIDER.hide()
+        acbsLabels = QWidget()
+        acbsLabels.setLayout(self.hSliderLabels(self.ADVANCED_CLONE_BLUR_SLIDER))
+        acbsLabels.hide()
+        
+        def blurSlider():
+            if self.ADVANCED_CLONE_BLUR.isChecked():
+                self.ADVANCED_CLONE_BLUR_SLIDER.show()
+                acbsLabels.show()
+            else:
+                self.ADVANCED_CLONE_BLUR_SLIDER.hide()
+                acbsLabels.hide()
+            self.updateAdvancedClone()
+        
+        self.ADVANCED_CLONE_BLUR.clicked.connect(blurSlider)
+        advanced_layout.addWidget(self.ADVANCED_CLONE_BLUR_SLIDER)
+        advanced_layout.addWidget(acbsLabels)
+        
+        self.ADVANCED_CLONE_ADATHRE = QCheckBox("Adaptive Thresholding")
+        self.ADVANCED_CLONE_ADATHRE.clicked.connect(self.updateAdvancedClone)
+        advanced_layout.addWidget(self.ADVANCED_CLONE_ADATHRE)
+        
+        
+        self.ADVANCED_CLONE_GROUPBOX.setLayout(advanced_layout)
+        self.ADVANCED_CLONE_GROUPBOX.hide()
+        
+        
+    def createAICloneDetection(self):
+        self.AI_CLONE_BUTTON = QPushButton("Clone Detection (AI)")
+        self.AI_CLONE_BUTTON.setToolTip("Apply AI clone detection to image")
+        self.AI_CLONE_BUTTON.clicked.connect(self.aiCloneClicked)
+        
+        self.AI_CLONE_GROUPBOX = QGroupBox()
+        
+        self.AI_CLONE_GROUPBOX.setTitle("Options")
+        
+        def cloneClick():
+            if self.SLIDER_IS_PRESSED == False:
+                self.updateAIClone()
+        
+        ai_layout = QVBoxLayout()
+        self.AI_CLONE_MINMATCH_SLIDER = self.hSlider(5, 1, 25)
+        self.AI_CLONE_MINMATCH_SLIDER.sliderReleased.connect(self.updateAIClone)
+        self.AI_CLONE_MINMATCH_SLIDER.valueChanged.connect(cloneClick)
+        self.AI_CLONE_MINMATCH_SLIDER.sliderPressed.connect(self.sliderDisabler)
+        
+        ai_layout.addWidget(self.AI_CLONE_MINMATCH_SLIDER)
+        ai_layout.addLayout(self.hSliderLabels(self.AI_CLONE_MINMATCH_SLIDER))
+        
+        self.AI_CLONE_GROUPBOX.setLayout(ai_layout)
+        self.AI_CLONE_GROUPBOX.hide()
+    
+    
+    def createMetadata(self):
+        self.METADATA_BUTTON = QPushButton("View Metadata")
+        self.METADATA_BUTTON.setToolTip("View original image")
+        self.METADATA_BUTTON.clicked.connect(self.metadataClicked)
+    
+    def initModesColumn(self):
+        layout = QVBoxLayout()
+        
+        # ----- No filter
+        self.createNoFilter()
+        
+        # ----- Color correction
+        self.createColorCorrection()
+        
+        # ----- Custom Filters
+        self.createCustomFilter()
+        
+        # ----- Error level analysis
+        self.createELA()
+        
+        # ----- Noise analysis
+        self.createNoise()
+        
+        # ----- Clone detection
+        self.createSimpleCloneDetection()
+ 
+        self.createAdvancedCloneDetection()
+  
+        self.createAICloneDetection()
+        
+        # ----- Metadata
+        self.createMetadata()
         
         
         # ----- Add all the elements to column
+        
+        
         layout.addWidget(self.NONE_BUTTON)
         
         layout.addWidget(self.makeLine())
@@ -408,6 +619,13 @@ class Imestigator(QMainWindow):
         layout.addWidget(self.COLOR_RED)
         layout.addWidget(self.COLOR_GREEN)
         layout.addWidget(self.COLOR_BLUE)
+        
+        layout.addWidget(self.makeLine())
+        
+        layout.addWidget(self.CUSTOM_BUTTON)
+        layout.addWidget(self.listOfFilters)
+        layout.addWidget(self.filterContainer)
+        layout.addWidget(self.CUSTOM_RESET)
         
         layout.addWidget(self.makeLine())
         
@@ -422,9 +640,18 @@ class Imestigator(QMainWindow):
         
         layout.addWidget(self.makeLine())
         
-        layout.addWidget(self.CLONE_BUTTON)
-        layout.addWidget(self.CLONE_RADIO_GROUPBOX)
-        layout.addWidget(self.CLONE_AUTO_GROUPBOX)
+        layout.addWidget(self.SIMPLE_CLONE_BUTTON)
+        layout.addWidget(self.SIMPLE_CLONE_GROUPBOX)
+        
+        layout.addWidget(self.makeLine())
+        
+        layout.addWidget(self.ADVANCED_CLONE_BUTTON)
+        layout.addWidget(self.ADVANCED_CLONE_GROUPBOX)
+        
+        layout.addWidget(self.makeLine())
+        
+        layout.addWidget(self.AI_CLONE_BUTTON)
+        layout.addWidget(self.AI_CLONE_GROUPBOX)
         
         
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
@@ -437,17 +664,21 @@ class Imestigator(QMainWindow):
         
         return box
 
+
     # ----- OVERRIDDEN FUNCTIONS 
+    
     
     def resizeEvent(self, a0: QResizeEvent) -> None:
         if self.imageLabel.pixmap() != None:
             self.scaleImage()   
             return super().resizeEvent(a0)
         
+        
     def closeEvent(self, event):
         if self.CURRENT_FILE != None:
             self.CURRENT_FILE.cleanup()
         event.accept()
+    
     
     
     # ----- HELPER FUNCTIONS FOR GETTING ELEMENTS
@@ -504,7 +735,13 @@ class Imestigator(QMainWindow):
         
         return layout
     
+    
+    def sliderDisabler(self):
+        self.SLIDER_IS_PRESSED = True
+    
+    
     # ----- FUNCTIONS FOR CHANGING VIEW OR LAYOUT
+    
     
     def toggleFiles(self):
         if self.FILESTATE:
@@ -545,14 +782,18 @@ class Imestigator(QMainWindow):
         self.COLOR_GREEN.hide()
         self.COLOR_BLUE.hide()
         
+        self.listOfFilters.hide()
+        self.filterContainer.hide()
+        self.CUSTOM_RESET.hide()
+        
         self.ELA_QUALITY_GROUPBOX.hide()
         self.ELA_OFFSET_GROUPBOX.hide()
         
         self.NOA_CONTENT.hide()
         
-        self.CLONE_RADIO_GROUPBOX.hide()
-        self.CLONE_AUTO_GROUPBOX.hide()
-        self.CLONE_DETECTING_GROUPBOX.hide()
+        self.SIMPLE_CLONE_GROUPBOX.hide()
+        self.ADVANCED_CLONE_GROUPBOX.hide()
+        self.AI_CLONE_GROUPBOX.hide()
     
     
     # ----- BUTTON HANDLING FUNCTIONS
@@ -572,10 +813,19 @@ class Imestigator(QMainWindow):
         self.COLOR_BLUE.show()
         
         self.scaleImage()
+    
+    def customFilterClicked(self):
+        self.ACTIVE_MODE = 2
+        self.collapse()
         
+        self.listOfFilters.show()
+        self.filterContainer.show()
+        self.CUSTOM_RESET.show()
+        
+        self.scaleImage()
         
     def elaClicked(self):
-        self.ACTIVE_MODE = 2
+        self.ACTIVE_MODE = 3
         self.collapse()
         self.ELA_QUALITY_GROUPBOX.show()
         self.ELA_OFFSET_GROUPBOX.show()
@@ -584,76 +834,102 @@ class Imestigator(QMainWindow):
 
 
     def noaClicked(self):
-        self.ACTIVE_MODE = 3
+        self.ACTIVE_MODE = 4
         self.collapse()
         self.NOA_CONTENT.show()
         
         self.scaleImage()
 
 
-    def cloneClicked(self):
-        self.ACTIVE_MODE = 4
-        self.CLONE_OPTION = 0
-        self.CLONE_RADIO_AUTO.toggle()
+    def simpleCloneClicked(self):
+        self.ACTIVE_MODE = 5
         self.collapse()
         
-        self.CLONE_RADIO_GROUPBOX.show()
-        self.CLONE_AUTO_GROUPBOX.show()
+        self.SIMPLE_CLONE_GROUPBOX.show()
         
         self.scaleImage()
         
+    def advancedCloneClicked(self):
+        self.ACTIVE_MODE = 6
+        self.collapse()
         
-    def cloneRadioButtonToggled(self):
-        if self.CLONE_RADIO_AUTO.isChecked():
-            self.CLONE_OPTION = 0
-            self.ACTIVE_MODE = 4
-        else:
-            self.CLONE_OPTION = 1
-            self.ACTIVE_MODE = 5
-        if self.CURRENT_FILE != None:
-            self.scaleImage()
-            
+        self.ADVANCED_CLONE_GROUPBOX.show()
+        
+        self.scaleImage()
+        
+    def aiCloneClicked(self):
+        self.ACTIVE_MODE = 7
+        self.collapse()
+        
+        self.AI_CLONE_GROUPBOX.show()
+        
+        self.scaleImage()
+    
+    def metadataClicked(self):
+        self.ACTIVE_MODE = 8
+        self.collapse()
 
     # ----- Image processing
     
     def buildImages(self):
-        self.BUTTONS = [self.COLOR_BUTTON, self.ELA_BUTTON, self.NOA_BUTTON, self.CLONE_BUTTON, self.CLONE_RADIO_DETECTING]
+        self.BUTTONS = [self.COLOR_BUTTON, self.CUSTOM_BUTTON, self.ELA_BUTTON, self.NOA_BUTTON, self.SIMPLE_CLONE_BUTTON, self.ADVANCED_CLONE_BUTTON, self.AI_CLONE_BUTTON]
         
         for button in self.BUTTONS:
             button.setEnabled(False)
         
         
         self.CLR_WORKER = ColorWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 100, 100, 100, self.CURRENT_FILE.images[1])
-        self.ELA_WORKER = ELAWorker(
+        
+        self.CUSTOM_WORKER = CustomWorker(
             self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
             self.CURRENT_FILE.images[2], 
+            filters=[]
+        )
+        
+        
+        self.ELA_WORKER = ELAWorker(
+            self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+            self.CURRENT_FILE.images[3], 
             q=self.ELA_SLIDER.value(), 
             offset_x=self.ELA_OFFSET_SLIDER_X.value(), 
             offset_y=self.ELA_OFFSET_SLIDER_Y.value()
             )
         
+        
         self.NOA_WORKER = NoiseWorker(
             self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
-            self.CURRENT_FILE.images[3], 
+            self.CURRENT_FILE.images[4], 
             self.NOA_SLIDER_FILTER_INTENSITY.value(), 
             self.NOA_SLIDER_FILTER_BRIGHTNESS.value(),
             useSharp=self.NOA_USESHARP.isChecked(),
             subtractEdges=self.NOA_SUBTRACTEDGES.isChecked()
             )
                     
-        self.CLONE_AUTO_WORKER = blockCompareWorker(
+        self.SIMPLE_CLONE_WORKER = blockCompareWorker(
             self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
-            self.CURRENT_FILE.images[4], 
-            block_size=self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
-            min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), 
-            aHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_A.value(), 
-            pHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_P.value()
+            self.CURRENT_FILE.images[5], 
+            block_size=self.SIMPLE_CLONE_SLIDER_BLOCKSIZE.value(), 
+            min_detail=self.SIMPLE_CLONE_SLIDER_DETAIL.value(), 
+            aHash_thresh=self.SIMPLE_CLONE_SLIDER_SIMILAR_A.value(), 
+            pHash_thresh=self.SIMPLE_CLONE_SLIDER_SIMILAR_P.value()
             )
         
-        self.CLONE_DETECTING_WORKER = detectingSIFTWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, self.CURRENT_FILE.images[5])
+        self.ADVANCED_CLONE_WORKER = detectingSIFTWorker(
+            self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+            self.CURRENT_FILE.images[6],
+            hist=self.ADVANCED_CLONE_HISTO.isChecked(),
+            blur=self.ADVANCED_CLONE_BLUR.isChecked,
+            blur_size=self.ADVANCED_CLONE_BLUR_SLIDER.value(),
+            adaThre=self.ADVANCED_CLONE_ADATHRE.isChecked()
+        )
         
+        self.AI_CLONE_WORKER = aiCloneWorker(
+            self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+            self.CURRENT_FILE.images[7],
+            minMatches=self.AI_CLONE_MINMATCH_SLIDER.value()
+        )
         
-        self.WORKERS = [self.CLR_WORKER, self.ELA_WORKER, self.NOA_WORKER, self.CLONE_AUTO_WORKER, self.CLONE_DETECTING_WORKER]
+        self.WORKERS = [self.CLR_WORKER, self.CUSTOM_WORKER, self.ELA_WORKER, self.NOA_WORKER, self.SIMPLE_CLONE_WORKER, self.ADVANCED_CLONE_WORKER, self.AI_CLONE_WORKER]
         
         for i in range(len(self.WORKERS)):
             self.WORKERS[i].finished.connect(lambda i=i: self.enableButton(self.BUTTONS[i]))
@@ -685,7 +961,28 @@ class Imestigator(QMainWindow):
                 self.CLR_WORKER = ColorWorker(self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, r, g, b, self.CURRENT_FILE.images[1])
                 self.CLR_WORKER.finished.connect(self.scaleImage)
                 self.CLR_WORKER.start()
+    
+    
+    def updateCustom(self):
+        if self.CURRENT_FILE != None:
+            if self.CUSTOM_WORKER.isRunning():
+                pass
+            else:
+                filters = []
                 
+                for n in range(self.filters.layoutSaver.count()):
+                    w = self.filters.layoutSaver.itemAt(n).widget()
+                    if w.isChecked():
+                        filters.append(w.text())
+                
+                self.CUSTOM_WORKER = CustomWorker(
+                    self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+                    self.CURRENT_FILE.images[2], 
+                    filters=filters
+                    )
+                self.CUSTOM_WORKER.finished.connect(self.scaleImage)
+                self.CUSTOM_WORKER.start()
+        
     
     def updateEla(self):
         self.SLIDER_IS_PRESSED = False
@@ -699,7 +996,7 @@ class Imestigator(QMainWindow):
                     
                     self.ELA_WORKER = ELAWorker(
                         self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
-                        self.CURRENT_FILE.images[2], 
+                        self.CURRENT_FILE.images[3], 
                         q=self.ELA_SLIDER.value(), 
                         offset_x=self.ELA_OFFSET_SLIDER_X.value(), 
                         offset_y=self.ELA_OFFSET_SLIDER_Y.value()
@@ -717,7 +1014,7 @@ class Imestigator(QMainWindow):
                 
                 self.NOA_WORKER = NoiseWorker(
                     self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
-                    self.CURRENT_FILE.images[3], 
+                    self.CURRENT_FILE.images[4], 
                     self.NOA_SLIDER_FILTER_INTENSITY.value(), 
                     self.NOA_SLIDER_FILTER_BRIGHTNESS.value(),
                     useSharp=self.NOA_USESHARP.isChecked(),
@@ -727,23 +1024,51 @@ class Imestigator(QMainWindow):
                 self.NOA_WORKER.finished.connect(self.scaleImage)
                 self.NOA_WORKER.start()
                 
-    def updateClone(self):
+    def updateSimpleClone(self):
         if self.CURRENT_FILE != None:
-            if self.CLONE_AUTO_WORKER.isRunning() or self.CLONE_DETECTING_WORKER.isRunning():
-                QTimer.singleShot(500, self.updateClone)
+            if self.SIMPLE_CLONE_WORKER.isRunning():
+                QTimer.singleShot(500, self.updateSimpleClone)
             else:        
-                self.CLONE_AUTO_WORKER = blockCompareWorker(
+                self.SIMPLE_CLONE_WORKER = blockCompareWorker(
                     self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
-                    self.CURRENT_FILE.images[4], 
-                    self.CLONE_AUTO_SLIDER_BLOCKSIZE.value(), 
-                    min_detail=self.CLONE_AUTO_SLIDER_DETAIL.value(), 
-                    aHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_A.value(), 
-                    pHash_thresh=self.CLONE_AUTO_SLIDER_SIMILAR_P.value()
+                    self.CURRENT_FILE.images[5], 
+                    self.SIMPLE_CLONE_SLIDER_BLOCKSIZE.value(), 
+                    min_detail=self.SIMPLE_CLONE_SLIDER_DETAIL.value(), 
+                    aHash_thresh=self.SIMPLE_CLONE_SLIDER_SIMILAR_A.value(), 
+                    pHash_thresh=self.SIMPLE_CLONE_SLIDER_SIMILAR_P.value()
                     )
                 
-                self.CLONE_AUTO_WORKER.finished.connect(self.scaleImage)
-                self.CLONE_AUTO_WORKER.start()
+                self.SIMPLE_CLONE_WORKER.finished.connect(self.scaleImage)
+                self.SIMPLE_CLONE_WORKER.start()
     
+    def updateAdvancedClone(self):
+        if self.CURRENT_FILE != None:
+            if self.ADVANCED_CLONE_WORKER.isRunning():
+                QTimer.singleShot(500, self.updateAdvancedClone)
+            else:
+                self.ADVANCED_CLONE_WORKER = detectingSIFTWorker(
+                    self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+                    self.CURRENT_FILE.images[6],
+                    hist=self.ADVANCED_CLONE_HISTO.isChecked(),
+                    blur=self.ADVANCED_CLONE_BLUR.isChecked,
+                    blur_size=self.ADVANCED_CLONE_BLUR_SLIDER.value(),
+                    adaThre=self.ADVANCED_CLONE_ADATHRE.isChecked()
+                )
+                self.ADVANCED_CLONE_WORKER.finished.connect(self.scaleImage)
+                self.ADVANCED_CLONE_WORKER.start()
+    
+    def updateAIClone(self):
+        if self.CURRENT_FILE != None:
+            if self.AI_CLONE_WORKER.isRunning():
+                QTimer.singleShot(500, self.updateAIClone)
+            else:
+                self.AI_CLONE_WORKER = aiCloneWorker(
+                    self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
+                    self.CURRENT_FILE.images[7],
+                    minMatches=self.AI_CLONE_MINMATCH_SLIDER.value()
+                )
+                self.AI_CLONE_WORKER.finished.connect(self.scaleImage)
+                self.AI_CLONE_WORKER.start()
     
 def main():
     app = QApplication(sys.argv)

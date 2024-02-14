@@ -4,11 +4,10 @@ import math
 import numpy as np
 
 class detectingSIFTWorker(QThread):
-    def __init__(self, imagePath, dsiftPath, grayScale = True, hist = False, blur = True, blur_size = 5, adaThre = True, parent=None):
+    def __init__(self, imagePath, dsiftPath, hist = False, blur = True, blur_size = 5, adaThre = True, parent=None):
         super().__init__(parent)
         self.imagePath = imagePath
         self.dsiftPath = dsiftPath
-        self.grayScale = grayScale
         self.hist = hist
         self.blur = blur
         self.blurSize = blur_size
@@ -21,9 +20,7 @@ class detectingSIFTWorker(QThread):
         bf = cv2.BFMatcher()
         
         gray = img.copy()
-        
-        if self.grayScale:
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             
         
         if self.hist:
@@ -40,13 +37,13 @@ class detectingSIFTWorker(QThread):
         
         
         if self.adaThre:
-            thresholded = cv2.adaptiveThreshold(lower_resultion, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+            gray = cv2.adaptiveThreshold(lower_resultion, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
         
         
         #thresholded = cv2.Canny(gray, 50, 200)
         
         kernel = np.ones((3,3),np.uint8)
-        no_noise = cv2.morphologyEx(thresholded, cv2.MORPH_OPEN, kernel)
+        no_noise = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel)
         no_noise = cv2.morphologyEx(no_noise, cv2.MORPH_CLOSE, kernel)
         
         no_noise = cv2.resize(no_noise, (width, height), interpolation=cv2.INTER_NEAREST)

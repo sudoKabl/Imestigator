@@ -9,7 +9,7 @@ class ImageData:
     WORKING_FOLDER_NAME = ".tmp_analyze"
     
     # Temp Images File Extensions
-    extensions = [".tmp.jpg", ".clr.png", ".ela.png", ".noa.png", ".asift.png", ".dsift.png"]
+    extensions = [".tmp.jpg",  ".clr.png", ".cst.png", ".ela.png", ".noa.png", ".scl.png", ".acl.png", ".kcl.png"]
     
     
     def __init__(self, imagePath):
