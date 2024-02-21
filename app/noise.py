@@ -22,7 +22,7 @@ class NoiseWorker(QThread):
         if self.useSharp:
             filtered = img_org.filter(ImageFilter.UnsharpMask(self.size))
         else:
-            filtered = img_org.filter(ImageFilter.MedianFilter(self.size))
+            filtered = img_org.filter(ImageFilter.GaussianBlur(self.size))
             
         
         only_noise = ImageChops.subtract(img_org, filtered)

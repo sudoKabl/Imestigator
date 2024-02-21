@@ -32,7 +32,7 @@ if False:
                 img.save(image_path)
             except Exception as e:
                 print("Issue with {}".format(image_path))
-if True:
+if False:
     # Data pipeline
     data = tf.keras.utils.image_dataset_from_directory(data_dir, batch_size=32, image_size=(256, 256))
 
@@ -88,7 +88,6 @@ if True:
     test = data.skip(train_size + val_size).take(test_size)
 
     model = tf.keras.models.Sequential()
-
 
     model.add(tf.keras.layers.Conv2D(16, (3,3), 1, activation='relu', input_shape=(256,256,3)))
     model.add(tf.keras.layers.MaxPooling2D())

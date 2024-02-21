@@ -41,6 +41,10 @@ class CustomWorker(QThread):
                     
                 elif filter == "Dilation":
                     img = cv.dilate(img, kernel, iterations=1)
+                    
+                elif filter == "Equalize Histogram":
+                    img = cv.equalizeHist(img)
+                    
             except Exception:
                 pass
         

@@ -3,7 +3,6 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import sys
-import math
 
 from app.ImageDataHolder import ImageData
 
@@ -15,14 +14,14 @@ from app.blockCompare import blockCompareWorker
 from app.detectingSIFT import detectingSIFTWorker
 from app.aiCloneDetection import aiCloneWorker
 
+# ----- For dragable checkboxes in custom filter 
+
 class DragCheckbox(QCheckBox):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.dragStartPosition = event.pos()
         return super().mousePressEvent(event)
-        
-
-            
+    
     def mouseMoveEvent(self, e):
         if e.buttons() != Qt.LeftButton:
             return
@@ -34,7 +33,8 @@ class DragCheckbox(QCheckBox):
         mimeData.setText(self.text())
         drag.setMimeData(mimeData)
         drag.exec()
-            
+
+# ----- For dragable checkboxes in custom filter       
 class DragGroubox(QGroupBox):
     elementMoved = pyqtSignal()
     
@@ -70,14 +70,16 @@ class DragGroubox(QGroupBox):
                     self.layoutSaver.insertWidget(0, widget)
                 else:
                     self.layoutSaver.insertWidget(n-1, widget)
+                self.elementMoved.emit()
                 e.accept()
                 return
             
         self.layoutSaver.insertWidget(self.layoutSaver.count(), widget)
-        e.accept()
         self.elementMoved.emit()
+        e.accept()
         
-
+        
+# -------------------- MAIN CLASS ------------------------------------------------------------
 class Imestigator(QMainWindow):
     FILESTATE = True
     MODESTATE = True
@@ -100,7 +102,7 @@ class Imestigator(QMainWindow):
         width = desktop.width()
         height = desktop.height()
         
-        self.setGeometry(math.floor(width / 4), math.floor(height / 4), math.floor(width / 2), math.floor(height / 2))
+        self.setGeometry(width // 4, height // 4, width // 2, height // 2)
         
         self.central_widget = QWidget(self)
         self.setCentralWidget(self.central_widget)
@@ -273,7 +275,7 @@ class Imestigator(QMainWindow):
         self.listOfFilters = QGroupBox("Available Filters")
         listOfFiltersLayout = QVBoxLayout()
         
-        buttons = ["Grayscale", "Gaussian Blur", "Median Filter", "Adaptive Threshold", "Canny Edge", "Erosion", "Dilation"]
+        buttons = ["Grayscale", "Equalize Histogram", "Gaussian Blur", "Median Filter", "Adaptive Threshold", "Canny Edge", "Erosion", "Dilation"]
 
         
         self.listOfFilters.setLayout(listOfFiltersLayout)
@@ -653,6 +655,10 @@ class Imestigator(QMainWindow):
         layout.addWidget(self.AI_CLONE_BUTTON)
         layout.addWidget(self.AI_CLONE_GROUPBOX)
         
+        layout.addWidget(self.makeLine())
+        
+        layout.addWidget(self.METADATA_BUTTON)
+        
         
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         layout.addSpacerItem(spacer)
@@ -814,6 +820,7 @@ class Imestigator(QMainWindow):
         
         self.scaleImage()
     
+    
     def customFilterClicked(self):
         self.ACTIVE_MODE = 2
         self.collapse()
@@ -823,6 +830,7 @@ class Imestigator(QMainWindow):
         self.CUSTOM_RESET.show()
         
         self.scaleImage()
+        
         
     def elaClicked(self):
         self.ACTIVE_MODE = 3
@@ -849,6 +857,7 @@ class Imestigator(QMainWindow):
         
         self.scaleImage()
         
+        
     def advancedCloneClicked(self):
         self.ACTIVE_MODE = 6
         self.collapse()
@@ -856,6 +865,7 @@ class Imestigator(QMainWindow):
         self.ADVANCED_CLONE_GROUPBOX.show()
         
         self.scaleImage()
+        
         
     def aiCloneClicked(self):
         self.ACTIVE_MODE = 7
@@ -865,9 +875,15 @@ class Imestigator(QMainWindow):
         
         self.scaleImage()
     
+    
     def metadataClicked(self):
-        self.ACTIVE_MODE = 8
-        self.collapse()
+        metalist = self.CURRENT_FILE.metadata()
+        
+        #print(metalist)
+        
+        self.dialog = TableDialog(metalist)
+        self.dialog.show()
+
 
     # ----- Image processing
     
@@ -1069,7 +1085,39 @@ class Imestigator(QMainWindow):
                 )
                 self.AI_CLONE_WORKER.finished.connect(self.scaleImage)
                 self.AI_CLONE_WORKER.start()
-    
+
+
+class TableDialog(QDialog):
+    def __init__(self, data, parent=None):
+        super(TableDialog, self).__init__(parent)
+        self.setWindowTitle('Metadata')
+        
+        desktop = QApplication.desktop().screenGeometry()
+        width = desktop.width()
+        height = desktop.height()
+        
+        self.setGeometry(width // 4 + width // 2, height // 4, width // 5, height // 2)
+        
+        
+        layout = QVBoxLayout()
+        
+        if data[0] == "No data found":
+            self.textWidget = QPlainTextEdit()
+            self.textWidget.setPlainText("No data found")
+            self.textWidget.setDisabled(True)
+            layout.addWidget(self.textWidget)
+        else:
+            self.tableWidget = QTableWidget(len(data), 2)
+            self.tableWidget.setHorizontalHeaderLabels(['Tag', 'Value'])
+
+            for row_num, row_data in enumerate(data):
+                for col_num, col_data in enumerate(row_data):
+                    self.tableWidget.setItem(row_num, col_num, QTableWidgetItem(str(col_data)))
+            layout.addWidget(self.tableWidget)
+            
+            
+        self.setLayout(layout)
+
 def main():
     app = QApplication(sys.argv)
     window = Imestigator()

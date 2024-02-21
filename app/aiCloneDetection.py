@@ -15,6 +15,7 @@ class aiCloneWorker(QThread):
     
     def run(self):
         img = cv2.imread(self.imagePath)
+        img = cv2.resize(img, (1024, 1024))
         
         model = FastSAM('FastSAM-s.pt')
         result = model(self.imagePath, device=0, retina_masks=True, imgsz=1024, conf=0.2, iou=0.7)
