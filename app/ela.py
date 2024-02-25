@@ -18,11 +18,15 @@ class ELAWorker(QThread):
         img_org = img_org.convert('RGB')
         img_tmp_path = self.elaPath + ".tmp_ela.jpg"
         
-        img_org.save(img_tmp_path, 'JPEG', quality=math.floor(self.q))
+        shifted_image = Image.new(img_org.mode, img_org.size)
+        shifted_image.paste(img_org, (self.offset_x, self.offset_y))
+        
+        shifted_image.save(img_tmp_path, 'JPEG', quality=math.floor(self.q))
+        
         tmp_img = Image.open(img_tmp_path)
         
-        shifted_image = Image.new(tmp_img.mode, tmp_img.size)
-        shifted_image.paste(tmp_img, (self.offset_x, self.offset_y))
+        shifted_image = Image.new(img_org.mode, img_org.size)
+        shifted_image.paste(tmp_img, (-self.offset_x, -self.offset_y))
         
         img_ela = ImageChops.difference(img_org, shifted_image)
 

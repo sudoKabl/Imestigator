@@ -1,4 +1,4 @@
-from PyQt5.QtGui import QMouseEvent, QResizeEvent
+from PyQt5.QtGui import QContextMenuEvent, QMouseEvent, QResizeEvent
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -14,69 +14,8 @@ from app.blockCompare import blockCompareWorker
 from app.detectingSIFT import detectingSIFTWorker
 from app.aiCloneDetection import aiCloneWorker
 
-# ----- For dragable checkboxes in custom filter 
-
-class DragCheckbox(QCheckBox):
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.dragStartPosition = event.pos()
-        return super().mousePressEvent(event)
-    
-    def mouseMoveEvent(self, e):
-        if e.buttons() != Qt.LeftButton:
-            return
-        if ((e.pos() - self.dragStartPosition).manhattanLength() < QApplication.startDragDistance()):
-            return
-
-        drag = QDrag(self)
-        mimeData = QMimeData()
-        mimeData.setText(self.text())
-        drag.setMimeData(mimeData)
-        drag.exec()
-
-# ----- For dragable checkboxes in custom filter       
-class DragGroubox(QGroupBox):
-    elementMoved = pyqtSignal()
-    
-    def __init__(self, title, parent=None):
-        super().__init__(title, parent)
-        self.setAcceptDrops(True)
-        self.layoutSaver = QVBoxLayout()
-    
-    def reset(self):
-        for n in range(self.layoutSaver.count()):
-            w = self.layoutSaver.itemAt(0).widget()
-            self.layoutSaver.removeWidget(w)
-    
-    def addCheckbox(self, checkbox):
-        self.layoutSaver.addWidget(checkbox)
-        
-    def dragEnterEvent(self, event):
-        event.accept()
-
-
-    def dropEvent(self, e):
-        pos = e.pos()
-        widget = e.source()
-        half = widget.size().height() // 2
-        a_y = pos.y()
-        
-        for n in range(self.layoutSaver.count()):
-            w = self.layoutSaver.itemAt(n).widget()
-            b_y = w.y()
-            
-            if a_y <= b_y + half:
-                if n == 0:
-                    self.layoutSaver.insertWidget(0, widget)
-                else:
-                    self.layoutSaver.insertWidget(n-1, widget)
-                self.elementMoved.emit()
-                e.accept()
-                return
-            
-        self.layoutSaver.insertWidget(self.layoutSaver.count(), widget)
-        self.elementMoved.emit()
-        e.accept()
+from ui.DragCheckboxes import DragCheckbox
+from ui.DragCheckboxes import DragGroubox
         
         
 # -------------------- MAIN CLASS ------------------------------------------------------------
@@ -144,6 +83,7 @@ class Imestigator(QMainWindow):
         
         search_field = QLineEdit()
         search_field.setPlaceholderText("Search or paste path")
+        search_field.setText(r"C:\Users\Kapsr\Pictures\test_image_folder")
         
         self.had_path = ""
         
@@ -176,6 +116,7 @@ class Imestigator(QMainWindow):
         model.setRootPath('')
         model.setNameFilters(["*.jpg", "*.jpeg", "*.png", "*.gif"])
         model.setNameFilterDisables(False)
+        
         
         self.tree = QTreeView()
         self.tree.setModel(model)
@@ -275,7 +216,13 @@ class Imestigator(QMainWindow):
         self.listOfFilters = QGroupBox("Available Filters")
         listOfFiltersLayout = QVBoxLayout()
         
-        buttons = ["Grayscale", "Equalize Histogram", "Gaussian Blur", "Median Filter", "Adaptive Threshold", "Canny Edge", "Erosion", "Dilation"]
+        buttons = ["Grayscale", "Equalize Histogram", 
+                   "Gaussian Blur", "Median Filter", 
+                   "Threshold", "Adaptive Threshold", 
+                   "Sobel X", "Sobel Y", "Laplacian Edge", "Canny Edge", 
+                   "Erosion", "Dilation", "Top Hat", "Black Hat",
+                   "ELA", "Noise Analysis",
+                   "Brightness and Contrast"]
 
         
         self.listOfFilters.setLayout(listOfFiltersLayout)
@@ -989,7 +936,13 @@ class Imestigator(QMainWindow):
                 for n in range(self.filters.layoutSaver.count()):
                     w = self.filters.layoutSaver.itemAt(n).widget()
                     if w.isChecked():
-                        filters.append(w.text())
+                        optarr = w.getOptions()
+                        opt = []
+                        
+                        for el in optarr:
+                            opt.append(el[2])
+                        
+                        filters.append((w.text(), opt))
                 
                 self.CUSTOM_WORKER = CustomWorker(
                     self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
@@ -1085,6 +1038,7 @@ class Imestigator(QMainWindow):
                 )
                 self.AI_CLONE_WORKER.finished.connect(self.scaleImage)
                 self.AI_CLONE_WORKER.start()
+
 
 
 class TableDialog(QDialog):
