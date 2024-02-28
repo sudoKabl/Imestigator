@@ -460,38 +460,60 @@ class Imestigator(QMainWindow):
         
         advanced_layout = QVBoxLayout()
         
-        self.ADVANCED_CLONE_HISTO = QCheckBox("Equalize histogram")
-        self.ADVANCED_CLONE_HISTO.clicked.connect(self.updateAdvancedClone)
-        advanced_layout.addWidget(self.ADVANCED_CLONE_HISTO)
+        bluramount_label = QLabel("Blur amount")
         
-        self.ADVANCED_CLONE_BLUR = QCheckBox("Blur Image")
-        advanced_layout.addWidget(self.ADVANCED_CLONE_BLUR)
+        self.ADVANCED_CLONE_SLIDER_BLUR_AMOUNT = self.hSlider(3, 1, 10)
+        self.ADVANCED_CLONE_SLIDER_BLUR_AMOUNT.sliderReleased.connect(self.updateAdvancedClone)
+        self.ADVANCED_CLONE_SLIDER_BLUR_AMOUNT.valueChanged.connect(cloneClick)
+        self.ADVANCED_CLONE_SLIDER_BLUR_AMOUNT.sliderPressed.connect(self.sliderDisabler)
         
-        self.ADVANCED_CLONE_BLUR_SLIDER = self.hSlider(5, 1, 9)
-        self.ADVANCED_CLONE_BLUR_SLIDER.valueChanged.connect(cloneClick)
-        self.ADVANCED_CLONE_BLUR_SLIDER.sliderPressed.connect(self.sliderDisabler)
-        self.ADVANCED_CLONE_BLUR_SLIDER.hide()
-        acbsLabels = QWidget()
-        acbsLabels.setLayout(self.hSliderLabels(self.ADVANCED_CLONE_BLUR_SLIDER))
-        acbsLabels.hide()
+        blursize_label = QLabel("Blur Size")
         
-        def blurSlider():
-            if self.ADVANCED_CLONE_BLUR.isChecked():
-                self.ADVANCED_CLONE_BLUR_SLIDER.show()
-                acbsLabels.show()
-            else:
-                self.ADVANCED_CLONE_BLUR_SLIDER.hide()
-                acbsLabels.hide()
-            self.updateAdvancedClone()
+        self.ADVANCED_CLONE_SLIDER_BLUR_SIZE = self.hSlider(5, 1, 12)
+        self.ADVANCED_CLONE_SLIDER_BLUR_SIZE.sliderReleased.connect(self.updateAdvancedClone)
+        self.ADVANCED_CLONE_SLIDER_BLUR_SIZE.valueChanged.connect(cloneClick)
+        self.ADVANCED_CLONE_SLIDER_BLUR_SIZE.sliderPressed.connect(self.sliderDisabler)
         
-        self.ADVANCED_CLONE_BLUR.clicked.connect(blurSlider)
-        advanced_layout.addWidget(self.ADVANCED_CLONE_BLUR_SLIDER)
-        advanced_layout.addWidget(acbsLabels)
+        adaptive_size_label = QLabel("Threshold Block size")
         
-        self.ADVANCED_CLONE_ADATHRE = QCheckBox("Adaptive Thresholding")
-        self.ADVANCED_CLONE_ADATHRE.clicked.connect(self.updateAdvancedClone)
-        advanced_layout.addWidget(self.ADVANCED_CLONE_ADATHRE)
+        self.ADVANCED_CLONE_SLIDER_ADAPTIVE_SIZE = self.hSlider(10, 5, 30)
+        self.ADVANCED_CLONE_SLIDER_ADAPTIVE_SIZE.sliderReleased.connect(self.updateAdvancedClone)
+        self.ADVANCED_CLONE_SLIDER_ADAPTIVE_SIZE.valueChanged.connect(cloneClick)
+        self.ADVANCED_CLONE_SLIDER_ADAPTIVE_SIZE.sliderPressed.connect(self.sliderDisabler)
         
+        min_similar_label = QLabel("Minimum similiarity")
+        
+        self.ADVANCED_CLONE_SLIDER_MINIMAL_SIMILAR = self.hSlider(5, 1, 10)
+        self.ADVANCED_CLONE_SLIDER_MINIMAL_SIMILAR.sliderReleased.connect(self.updateAdvancedClone)
+        self.ADVANCED_CLONE_SLIDER_MINIMAL_SIMILAR.valueChanged.connect(cloneClick)
+        self.ADVANCED_CLONE_SLIDER_MINIMAL_SIMILAR.sliderPressed.connect(self.sliderDisabler)
+        
+        min_matches_label = QLabel("Minimum matches")
+        
+        self.ADVANCED_CLONE_SLIDER_MINIMAL_MATCH = self.hSlider(8, 1, 16)
+        self.ADVANCED_CLONE_SLIDER_MINIMAL_MATCH.sliderReleased.connect(self.updateAdvancedClone)
+        self.ADVANCED_CLONE_SLIDER_MINIMAL_MATCH.valueChanged.connect(cloneClick)
+        self.ADVANCED_CLONE_SLIDER_MINIMAL_MATCH.sliderPressed.connect(self.sliderDisabler)
+        
+        advanced_layout.addWidget(bluramount_label)
+        advanced_layout.addWidget(self.ADVANCED_CLONE_SLIDER_BLUR_AMOUNT)
+        advanced_layout.addLayout(self.hSliderLabels(self.ADVANCED_CLONE_SLIDER_BLUR_AMOUNT))
+        
+        advanced_layout.addWidget(blursize_label)
+        advanced_layout.addWidget(self.ADVANCED_CLONE_SLIDER_BLUR_SIZE)
+        advanced_layout.addLayout(self.hSliderLabels(self.ADVANCED_CLONE_SLIDER_BLUR_SIZE))
+        
+        advanced_layout.addWidget(adaptive_size_label)
+        advanced_layout.addWidget(self.ADVANCED_CLONE_SLIDER_ADAPTIVE_SIZE)
+        advanced_layout.addLayout(self.hSliderLabels(self.ADVANCED_CLONE_SLIDER_ADAPTIVE_SIZE))
+        
+        advanced_layout.addWidget(min_similar_label)
+        advanced_layout.addWidget(self.ADVANCED_CLONE_SLIDER_MINIMAL_SIMILAR)
+        advanced_layout.addLayout(self.hSliderLabels(self.ADVANCED_CLONE_SLIDER_MINIMAL_SIMILAR))
+        
+        advanced_layout.addWidget(min_matches_label)
+        advanced_layout.addWidget(self.ADVANCED_CLONE_SLIDER_MINIMAL_MATCH)
+        advanced_layout.addLayout(self.hSliderLabels(self.ADVANCED_CLONE_SLIDER_MINIMAL_MATCH))
         
         self.ADVANCED_CLONE_GROUPBOX.setLayout(advanced_layout)
         self.ADVANCED_CLONE_GROUPBOX.hide()
@@ -511,13 +533,28 @@ class Imestigator(QMainWindow):
                 self.updateAIClone()
         
         ai_layout = QVBoxLayout()
-        self.AI_CLONE_MINMATCH_SLIDER = self.hSlider(5, 1, 25)
+        
+        min_matches_label = QLabel("Minimum matches")
+        
+        self.AI_CLONE_MINMATCH_SLIDER = self.hSlider(8, 1, 25)
         self.AI_CLONE_MINMATCH_SLIDER.sliderReleased.connect(self.updateAIClone)
         self.AI_CLONE_MINMATCH_SLIDER.valueChanged.connect(cloneClick)
         self.AI_CLONE_MINMATCH_SLIDER.sliderPressed.connect(self.sliderDisabler)
         
+        min_similar_label = QLabel("Minimum similiarity")
+        
+        self.AI_CLONE_SLIDER_MINIMAL_SIMILAR = self.hSlider(5, 1, 10)
+        self.AI_CLONE_SLIDER_MINIMAL_SIMILAR.sliderReleased.connect(self.updateAIClone)
+        self.AI_CLONE_SLIDER_MINIMAL_SIMILAR.valueChanged.connect(cloneClick)
+        self.AI_CLONE_SLIDER_MINIMAL_SIMILAR.sliderPressed.connect(self.sliderDisabler)
+        
+        ai_layout.addWidget(min_matches_label)
         ai_layout.addWidget(self.AI_CLONE_MINMATCH_SLIDER)
         ai_layout.addLayout(self.hSliderLabels(self.AI_CLONE_MINMATCH_SLIDER))
+        
+        ai_layout.addWidget(min_similar_label)
+        ai_layout.addWidget(self.AI_CLONE_SLIDER_MINIMAL_SIMILAR)
+        ai_layout.addLayout(self.hSliderLabels(self.AI_CLONE_SLIDER_MINIMAL_SIMILAR))
         
         self.AI_CLONE_GROUPBOX.setLayout(ai_layout)
         self.AI_CLONE_GROUPBOX.hide()
@@ -880,16 +917,18 @@ class Imestigator(QMainWindow):
         self.ADVANCED_CLONE_WORKER = detectingSIFTWorker(
             self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
             self.CURRENT_FILE.images[6],
-            hist=self.ADVANCED_CLONE_HISTO.isChecked(),
-            blur=self.ADVANCED_CLONE_BLUR.isChecked,
-            blur_size=self.ADVANCED_CLONE_BLUR_SLIDER.value(),
-            adaThre=self.ADVANCED_CLONE_ADATHRE.isChecked()
+            blur = self.ADVANCED_CLONE_SLIDER_BLUR_AMOUNT.value(),
+            blur_size = self.ADVANCED_CLONE_SLIDER_BLUR_SIZE.value(),
+            adaThre = self.ADVANCED_CLONE_SLIDER_ADAPTIVE_SIZE.value(),
+            min_similar=self.ADVANCED_CLONE_SLIDER_MINIMAL_SIMILAR.value(),
+            min_matches=self.ADVANCED_CLONE_SLIDER_MINIMAL_MATCH.value()
         )
-        
+
         self.AI_CLONE_WORKER = aiCloneWorker(
             self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
             self.CURRENT_FILE.images[7],
-            minMatches=self.AI_CLONE_MINMATCH_SLIDER.value()
+            minMatches=self.AI_CLONE_MINMATCH_SLIDER.value(),
+            minSimilar=self.AI_CLONE_SLIDER_MINIMAL_SIMILAR.value()
         )
         
         self.WORKERS = [self.CLR_WORKER, self.CUSTOM_WORKER, self.ELA_WORKER, self.NOA_WORKER, self.SIMPLE_CLONE_WORKER, self.ADVANCED_CLONE_WORKER, self.AI_CLONE_WORKER]
@@ -1018,10 +1057,11 @@ class Imestigator(QMainWindow):
                 self.ADVANCED_CLONE_WORKER = detectingSIFTWorker(
                     self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
                     self.CURRENT_FILE.images[6],
-                    hist=self.ADVANCED_CLONE_HISTO.isChecked(),
-                    blur=self.ADVANCED_CLONE_BLUR.isChecked,
-                    blur_size=self.ADVANCED_CLONE_BLUR_SLIDER.value(),
-                    adaThre=self.ADVANCED_CLONE_ADATHRE.isChecked()
+                    blur = self.ADVANCED_CLONE_SLIDER_BLUR_AMOUNT.value(),
+                    blur_size = self.ADVANCED_CLONE_SLIDER_BLUR_SIZE.value(),
+                    adaThre = self.ADVANCED_CLONE_SLIDER_ADAPTIVE_SIZE.value(),
+                    min_similar=self.ADVANCED_CLONE_SLIDER_MINIMAL_SIMILAR.value(),
+                    min_matches=self.ADVANCED_CLONE_SLIDER_MINIMAL_MATCH.value()
                 )
                 self.ADVANCED_CLONE_WORKER.finished.connect(self.scaleImage)
                 self.ADVANCED_CLONE_WORKER.start()
@@ -1034,7 +1074,8 @@ class Imestigator(QMainWindow):
                 self.AI_CLONE_WORKER = aiCloneWorker(
                     self.CURRENT_FILE.ORIGINAL_IMAGE_PATH, 
                     self.CURRENT_FILE.images[7],
-                    minMatches=self.AI_CLONE_MINMATCH_SLIDER.value()
+                    minMatches=self.AI_CLONE_MINMATCH_SLIDER.value(),
+                    minSimilar=self.AI_CLONE_SLIDER_MINIMAL_SIMILAR.value()
                 )
                 self.AI_CLONE_WORKER.finished.connect(self.scaleImage)
                 self.AI_CLONE_WORKER.start()

@@ -6,16 +6,17 @@ import math
 
 
 class aiCloneWorker(QThread):
-    def __init__(self, imagePath, clonePath, minMatches=5, parent=None):
+    def __init__(self, imagePath, clonePath, minMatches=5, minSimilar=5, parent=None):
         super().__init__(parent)
         self.imagePath = imagePath
         self.clonePath = clonePath
         self.minMatches = minMatches
+        self.minSimilar = minSimilar/10
     
     
     def run(self):
         img = cv2.imread(self.imagePath)
-        img = cv2.resize(img, (1024, 1024))
+        #img = cv2.resize(img, (1024, 1024)) this breaks it
         
         model = FastSAM('FastSAM-s.pt')
         result = model(self.imagePath, device=0, retina_masks=True, imgsz=1024, conf=0.2, iou=0.7)
@@ -25,45 +26,43 @@ class aiCloneWorker(QThread):
         limits = [width, height, width, height]
         
         elements = []
+        expanding = [-10, -10, 10, 10]
         
         for box in prompt_process.results[0].boxes.xyxy:
-            area = (
+            area = [
                 math.floor(box.cpu().numpy()[0]), 
                 math.floor(box.cpu().numpy()[1]), 
                 math.floor(box.cpu().numpy()[2]), 
                 math.floor(box.cpu().numpy()[3])
-                )
-            expanding = [-10, -10, 10, 10]
+                ]
+            
             
             for i in range(4):
-                if 0 > area[i] + expanding[i] or area[i] + expanding[i] > limits[i]:
-                    expanding[i] = 0
+                if not (0 > area[i] + expanding[i] or area[i] + expanding[i] > limits[i]):
+                    area[i] += expanding[i]
+                    
+            crop = img[area[1]:area[3], area[0]:area[2]]
+            crop_width, crop_height = crop.shape[:2]
             
-            crop = img[area[1]+expanding[0]:area[3]+expanding[1], 
-                     area[0]+expanding[2]:area[2]+expanding[3]]
-            w, h = crop.shape[:2]
-            
-            if w > 1 and h > 1:
-            
+            if crop_width > 1 and crop_height > 1:
                 scale = 1
-                if w >= h:
-                    if w > 512:
-                        scale = w / 512
-                    elif w < 512:
-                        scale = 512 / w
+                if crop_width >= crop_height:
+                    if crop_width > 512:
+                        scale = crop_width // 512
+                    elif crop_width < 512:
+                        scale = 512 // crop_width
                 else:
-                    if h > 512:
-                        scale = h / 512
-                    elif h < 512:
-                        scale = 512 / h
+                    if crop_height > 512:
+                        scale = crop_height // 512
+                    elif crop_height < 512:
+                        scale = 512 // crop_height
+                        
+                crop_width *= scale
+                crop_height *= scale
                 
-                w *= scale
-                h *= scale
+                resize = cv2.resize(crop, (crop_height, crop_width), interpolation=cv2.INTER_LANCZOS4)
                 
-                
-                resize = cv2.resize(crop, (math.floor(h), math.floor(w)), interpolation=cv2.INTER_LANCZOS4)
-                
-                elements.append((area, resize, scale, expanding))
+                elements.append((area, resize, scale))
         
         bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=False)
         sift = cv2.SIFT_create()
@@ -71,9 +70,11 @@ class aiCloneWorker(QThread):
         kp1, des1 = sift.detectAndCompute(img, None)
         
         draw = img.copy()
-        
-        for (area, resize, scale, expanding) in elements:
+        print("Starting to comprea ai")
+        print(len(elements))
+        for (area, resize, scale) in elements:
             kp2, des2 = sift.detectAndCompute(resize, None)
+            print(len(kp2))
             if des2 is not None and len(des2) > 0:
                 matches = bf.knnMatch(des1, des2, k=2)
                 
@@ -83,12 +84,11 @@ class aiCloneWorker(QThread):
                         if len(match) < 2:
                             continue
                         m, n = match
-                        if m.distance < 0.4*n.distance:
-                            good.append([m])
+                        if m.distance < self.minSimilar*n.distance:
+                            good.append(m)
                     
                     if len(good) >= self.minMatches:
-                        for match in good:
-                            m = match[0]
+                        for m in good:
                             query_idx = m.queryIdx
                             train_idx = m.trainIdx
                             
@@ -100,7 +100,7 @@ class aiCloneWorker(QThread):
                             x2 += area[0]
                             y2 += area[1]
                             
-                            if area[0]+expanding[0] <= x1 <= area[2]+expanding[2] and area[1]+expanding[1] <= y1 <= area[3]+expanding[3]:
+                            if area[0] <= x1 <= area[2] and area[1] <= y1 <= area[3]:
                                 continue
                             
                             

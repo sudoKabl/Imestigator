@@ -1,141 +1,125 @@
 from PyQt5.QtCore import QThread
-import cv2
-import math
+import cv2 as cv
 import numpy as np
 
 class detectingSIFTWorker(QThread):
-    def __init__(self, imagePath, dsiftPath, hist = False, blur = True, blur_size = 5, adaThre = True, parent=None):
+    def __init__(self, imagePath, dsiftPath, blur = 3, blur_size = 5, adaThre = 21, min_similar = 0.5, min_matches = 8, parent=None):
         super().__init__(parent)
         self.imagePath = imagePath
         self.dsiftPath = dsiftPath
-        self.hist = hist
+
         self.blur = blur
         self.blurSize = blur_size
-        self.adaThre = adaThre
+        self.adaThre = int(adaThre * 2 + 1)
+        self.minSimilar = min_similar / 10
+        self.minMatch = min_matches
 
         
     def run(self):
-        img = cv2.imread(self.imagePath)
-        sift = cv2.SIFT_create()
-        bf = cv2.BFMatcher()
+        img_org = cv.imread(self.imagePath)
+        sift = cv.SIFT_create()
+        bf = cv.BFMatcher(cv.NORM_L2, crossCheck=False)
+        kernel = np.ones((3,3),np.uint8)       
+        height, width = img_org.shape[:2]
+ 
         
-        gray = img.copy()
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            
+        gray = cv.cvtColor(img_org, cv.COLOR_BGR2GRAY)
+        gray = cv.equalizeHist(gray)
         
-        if self.hist:
-            gray = cv2.equalizeHist(gray)
-            
-            
-        if self.blur:
-            gray = cv2.GaussianBlur(gray,(self.blurSize, self.blurSize), 0)
-        
-        height, width = gray.shape
-        w, h = (math.floor(width/4), math.floor(height/4))
-        
-        lower_resultion = cv2.resize(gray, (w, h), interpolation=cv2.INTER_LINEAR)
+        for i in range(self.blur):
+            gray = cv.GaussianBlur(gray, (self.blurSize, self.blurSize), 0)
         
         
-        if self.adaThre:
-            gray = cv2.adaptiveThreshold(lower_resultion, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-        
-        
-        #thresholded = cv2.Canny(gray, 50, 200)
-        
-        kernel = np.ones((3,3),np.uint8)
-        no_noise = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel)
-        no_noise = cv2.morphologyEx(no_noise, cv2.MORPH_CLOSE, kernel)
-        
-        no_noise = cv2.resize(no_noise, (width, height), interpolation=cv2.INTER_NEAREST)
-        
-        #cv2.imwrite(self.dsiftPath, no_noise)
-        
-        # Get keypoints of original image
-        keypoints, descriptors = sift.detectAndCompute(img, None)
-        
-        # Get contours of objects in filtered image
-        contours, _ = cv2.findContours(no_noise, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        
-        # Convert contours to convex hulls to get rid of some noise and indents
-        hulls = []
-        
-        for cont in contours:
-            hull = cv2.convexHull(cont)
-            hulls.append(hull)
-            
-        # Filter contours so very big or smalls ones dont get considered
-        filtered_contours = [cnt for cnt in contours if 10 < cv2.contourArea(cnt) < 20000]
-        
-        des_of_object = [[] for _ in range(len(filtered_contours))]
-        kp_of_object = [[] for _ in range(len(filtered_contours))]
-        indexes = [[] for _ in range(len(filtered_contours))]
-        
-        point_in_struct = []
-        i = 0
-        
-        
-        # Collect all the keypoints and descriptors that are actually inside of hulls (with some tolerance)
-        for index_kp, point in enumerate(keypoints):
-            (x, y) = point.pt
-            
-            for index_c, contour in enumerate(filtered_contours):
-                if i == 0:
-                    i = 1
-                    continue
-                
-                dist = cv2.pointPolygonTest(contour, (x, y), True)
-                # TODO: Changeable tolerance
-                if dist >= -10:
-                    point_in_struct.append(point)
-                    
-                    des_of_object[index_c].append(descriptors[index_kp])
-                    kp_of_object[index_c].append(keypoints[index_kp])
-                    indexes[index_c].append(index_kp)
-                    
-                    break
-        
-        img = cv2.drawKeypoints(img, point_in_struct, img, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-        
-        # Draw contours
-        for contour in filtered_contours:
-            if i == 0:
-                i = 1
-                continue
-            cv2.drawContours(img, [contour], 0, (0, 0, 255), 1) 
+        thresh = cv.adaptiveThreshold(gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, self.adaThre, 2)
+        dilated_1 = cv.dilate(thresh, kernel, iterations=1)
     
-        tester = 0
-        for index, obj_des in enumerate(des_of_object):
-            np_des = np.array(obj_des)
-            
-            if len(obj_des) == 0:
+        edges = cv.Canny(dilated_1, 50, 150)
+        dilated_2 = cv.dilate(edges, kernel, iterations=1)
+        
+        contours, _ = cv.findContours(dilated_2, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+ 
+        
+        limits = [width, height, width, height]
+        expanding = [-20, -20, 20, 20]
+        
+        elements = []
+        
+        kp_org, des_org = sift.detectAndCompute(img_org, None)
+        
+        for cnt in contours:
+            x, y, w, h = cv.boundingRect(cnt)
+            if w < 20 or h < 20 or w > width/2 or h > height/2:
                 continue
-            #TODO:
-            # des hier anpassen, sodass np_des nicht enthalten ist
-            # alternativ: np des in den matches ausschließen?
             
-            temp_des = descriptors.copy()
+            area = [x, y, x+w, y+h]
             
-            for to_delete in reversed(indexes[index]):
-                temp_des = np.delete(temp_des, to_delete, 0)
             
-            matches = bf.knnMatch(np_des, temp_des, k=2)
-            kps = kp_of_object[index]
             
-            if matches != []:
-                good = []
+            for i in range(4):
+                if not (0 > area[i] + expanding[i] or area[i] + expanding[i] > limits[i]):
+                    area[i] += expanding[i]
+                    
+            crop = img_org[area[1]:area[3], area[0]:area[2]]
+            
+            crop_width, crop_height = crop.shape[:2]
+            
+            if crop_width > 1 and crop_height > 1:
+                scale = 1
+                if crop_width >= crop_height:
+                    if crop_width > 512:
+                        scale = crop_width // 512
+                    elif crop_width < 512:
+                        scale = 512 // crop_width
+                else:
+                    if crop_height > 512:
+                        scale = crop_height // 512
+                    elif crop_height < 512:
+                        scale = 512 // crop_height
+                        
+                crop_width *= scale
+                crop_height *= scale
                 
-                for m,n in matches:
-                    if m.distance < 0.75*n.distance:
-                        good.append([m])
-                # TODO: MInimale matches anpassbar
-                if len(good) > 4:
-                    for match_obj in good:
-                        tester += 1
-                        for dingsi in match_obj:
-                            pt1 = tuple(map(int, kps[dingsi.queryIdx].pt))
-                            pt2 = tuple(map(int, keypoints[dingsi.trainIdx].pt))
-                            cv2.line(img, pt1, pt2, (0, 255, 0), 2)
+                resize = cv.resize(crop, (crop_height, crop_width), interpolation=cv.INTER_LANCZOS4)
                 
-        cv2.imwrite(self.dsiftPath, img)
+                elements.append((area, resize, scale))
                 
+        print("Starting to comprea advanced")
+        print(len(elements))
+        for (area, resize, scale) in elements:
+            kp_resize, des_resize = sift.detectAndCompute(resize, None)
+            if des_resize is not None and len(des_resize) > 0:
+                matches = bf.knnMatch(des_org, des_resize, k=2)
+                
+                if len(matches) > 0:
+                    good = []
+                    for match in matches:
+                        if len(match) < 2:
+                            continue
+                        m, n = match
+                        if m.distance < self.minSimilar*n.distance:
+                            good.append(m)
+                            
+                    if len(good) >= self.minMatch:
+                        for m in good:
+                            query_idx = m.queryIdx
+                            train_idx = m.trainIdx
+                            
+                            (x1, y1) = kp_org[query_idx].pt
+                            (x2, y2) = kp_resize[train_idx].pt
+                            
+                            x2 /= scale
+                            y2 /= scale
+                            x2 += area[0]
+                            y2 += area[1]
+                            
+                            if area[0] <= x1 <= area[2] and area[1] <= y1 <= area[3]:
+                                continue
+                            
+                            cv.circle(img_org, (int(x1), int(y1)), 10, (0, 255, 0), -1) 
+                            cv.circle(img_org, (int(x2), int(y2)), 10, (0, 255, 0), -1)
+                            cv.line(img_org, tuple(map(int, (x1, y1))), tuple(map(int, (x2, y2))), (0, 255, 0), 2)
+        
+         
+        cv.imwrite(self.dsiftPath, img_org)
         self.finished.emit()
+        return
