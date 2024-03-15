@@ -1,7 +1,5 @@
-from PIL import Image, ImageChops, ImageEnhance
-import math
-import os
-from PyQt5.QtCore import QObject, QThread
+from PIL import Image
+from PyQt5.QtCore import QThread
 
 class ColorWorker(QThread):
     def __init__(self, imagePath, r, g, b, colorPath, parent=None):

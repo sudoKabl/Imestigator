@@ -1,6 +1,5 @@
 import os
 import shutil
-from PIL import Image
 from PIL.ExifTags import TAGS
 import subprocess
 

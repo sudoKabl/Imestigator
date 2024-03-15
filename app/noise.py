@@ -1,4 +1,4 @@
-from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageEnhance, ImageFilter
 from PyQt5.QtCore import QThread
 import cv2
 import numpy as np

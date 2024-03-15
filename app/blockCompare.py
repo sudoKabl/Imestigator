@@ -1,7 +1,7 @@
 from PyQt5.QtCore import QThread
 import numpy as np
 import math
-from PIL import Image, ImageStat, ImageDraw, ImageFilter
+from PIL import Image, ImageStat, ImageDraw
 import imagehash
 import pywt
 

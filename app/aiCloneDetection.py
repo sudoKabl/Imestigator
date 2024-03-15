@@ -70,11 +70,8 @@ class aiCloneWorker(QThread):
         kp1, des1 = sift.detectAndCompute(img, None)
         
         draw = img.copy()
-        print("Starting to comprea ai")
-        print(len(elements))
         for (area, resize, scale) in elements:
             kp2, des2 = sift.detectAndCompute(resize, None)
-            print(len(kp2))
             if des2 is not None and len(des2) > 0:
                 matches = bf.knnMatch(des1, des2, k=2)
                 

@@ -83,8 +83,6 @@ class detectingSIFTWorker(QThread):
                 
                 elements.append((area, resize, scale))
                 
-        print("Starting to comprea advanced")
-        print(len(elements))
         for (area, resize, scale) in elements:
             kp_resize, des_resize = sift.detectAndCompute(resize, None)
             if des_resize is not None and len(des_resize) > 0:

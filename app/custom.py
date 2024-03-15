@@ -1,8 +1,6 @@
 from PyQt5.QtCore import QThread
 import cv2 as cv
 import numpy as np
-import math
-import os
 
 class CustomWorker(QThread):
     def __init__(self, imagePath, generalPath, filters, parent=None):
