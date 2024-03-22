@@ -3,6 +3,7 @@ from ultralytics import FastSAM
 import cv2
 from ultralytics.models.fastsam import FastSAMPrompt
 import math
+import torch
 
 
 class aiCloneWorker(QThread):
@@ -19,8 +20,10 @@ class aiCloneWorker(QThread):
         #img = cv2.resize(img, (1024, 1024)) this breaks it
         
         model = FastSAM('FastSAM-s.pt')
-        result = model(self.imagePath, device=0, retina_masks=True, imgsz=1024, conf=0.2, iou=0.7)
-        prompt_process = FastSAMPrompt(self.imagePath, result, device=0)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        result = model(self.imagePath, device=device, retina_masks=True, imgsz=1024, conf=0.2, iou=0.7)
+        prompt_process = FastSAMPrompt(self.imagePath, result, device=device)
         
         height, width = img.shape[:2]
         limits = [width, height, width, height]
